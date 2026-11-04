@@ -3,6 +3,7 @@ import cors from 'cors';
 import helmet from 'helmet';
 import morgan from 'morgan';
 import cookieParser from 'cookie-parser';
+import authRoutes from './routes/authRoutes.js';
 
 const app = express();
 
@@ -25,6 +26,9 @@ app.use(cookieParser());
 app.get('/api/health', (req, res) => {
   res.json({ ok: true });
 });
+
+// Authentication routes
+app.use('/api/auth', authRoutes);
 
 // Routes will be mounted here as we build them.
 
