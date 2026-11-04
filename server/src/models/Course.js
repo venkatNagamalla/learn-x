@@ -58,6 +58,7 @@ const courseSchema = new mongoose.Schema(
       default: 0,
       min: 0,
     },
+    seeded: { type: Boolean, default: false },
   },
   { timestamps: true }
 );

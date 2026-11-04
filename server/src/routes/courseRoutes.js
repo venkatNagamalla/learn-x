@@ -1,8 +1,10 @@
+
 import express from 'express';
 
 import {
   getCourses,
   getCourseById,
+  getInstructorCourseCurriculum,
   createCourse,
   updateCourse,
   deleteCourse,
@@ -11,9 +13,9 @@ import {
   createSection,
   updateSection,
   deleteSection,
-createLesson,
-updateLesson,
-deleteLesson,
+  createLesson,
+  updateLesson,
+  deleteLesson,
 } from '../controllers/courseController.js';
 
 import {
@@ -30,6 +32,9 @@ router.get('/:id', getCourseById);
 
 // Instructor-only routes
 router.use(protect, requireRole('instructor'));
+
+// Get an owned course with its curriculum (including drafts)
+router.get('/manage/:id', getInstructorCourseCurriculum);
 
 router.post('/', createCourse);
 router.put('/:id', updateCourse);
@@ -48,6 +53,5 @@ router.post(
 );
 router.put('/lessons/:lessonId', updateLesson);
 router.delete('/lessons/:lessonId', deleteLesson);
-
 
 export default router;

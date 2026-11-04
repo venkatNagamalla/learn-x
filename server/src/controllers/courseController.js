@@ -1,3 +1,4 @@
+
 import Course from '../models/Course.js';
 import Section from '../models/Section.js';
 import Lesson from '../models/Lesson.js';
@@ -53,6 +54,7 @@ export const getCourses = asyncHandler(async (req, res) => {
 });
 
 // GET /api/courses/:id
+// Public course details - published courses only
 export const getCourseById = asyncHandler(async (req, res) => {
   const course = await Course.findOne({
     _id: req.params.id,
@@ -94,6 +96,58 @@ export const getCourseById = asyncHandler(async (req, res) => {
     })),
   });
 });
+
+// GET /api/courses/manage/:id
+// Instructor-only course details and curriculum
+export const getInstructorCourseCurriculum = asyncHandler(
+  async (req, res) => {
+    const course = await Course.findById(req.params.id)
+      .populate('instructor', 'name');
+
+    if (!course) {
+      throw new ApiError(404, 'Course not found');
+    }
+
+    // Verify that the logged-in instructor owns this course
+    assertOwner(course, req.user);
+
+    const sections = await Section.find({
+      course: course._id,
+    })
+      .sort({ order: 1 })
+      .lean();
+
+    // Return only safe lesson fields
+    const lessons = await Lesson.find({
+      course: course._id,
+    })
+      .select('section title description duration isPreview order')
+      .sort({ order: 1 })
+      .lean();
+
+    res.json({
+      course,
+      sections: sections.map((section) => ({
+        _id: section._id,
+        title: section.title,
+        order: section.order,
+        lessons: lessons
+          .filter(
+            (lesson) =>
+              String(lesson.section) === String(section._id)
+          )
+          .map((lesson) => ({
+            _id: lesson._id,
+            title: lesson.title,
+            description: lesson.description,
+            duration: lesson.duration,
+            isPreview: lesson.isPreview,
+            order: lesson.order,
+          })),
+      })),
+    });
+  }
+);
 
 // POST /api/courses
 export const createCourse = asyncHandler(async (req, res) => {
