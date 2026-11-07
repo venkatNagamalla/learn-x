@@ -1,11 +1,14 @@
+
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import morgan from 'morgan';
 import cookieParser from 'cookie-parser';
+
 import authRoutes from './routes/authRoutes.js';
 import courseRoutes from './routes/courseRoutes.js';
 import adminRoutes from './routes/adminRoutes.js';
+import lessonRoutes from './routes/lessonRoutes.js';
 
 const app = express();
 
@@ -13,7 +16,7 @@ app.use(helmet());
 
 app.use(cors({
   origin: process.env.CLIENT_URL,
-  credentials: true
+  credentials: true,
 }));
 
 app.use(morgan('dev'));
@@ -31,16 +34,22 @@ app.get('/api/health', (req, res) => {
 
 // Authentication routes
 app.use('/api/auth', authRoutes);
+
+// Course management routes
 app.use('/api/courses', courseRoutes);
+
+// Admin routes
 app.use('/api/admin', adminRoutes);
 
-// Routes will be mounted here as we build them.
+// Lesson video upload routes
+app.use('/api/lessons', lessonRoutes);
 
+// Global error handler
 app.use((err, req, res, next) => {
   console.error(err);
 
   res.status(err.status || 500).json({
-    message: err.message || 'Server error'
+    message: err.message || 'Server error',
   });
 });
 
