@@ -1,11 +1,25 @@
 
 import { Queue } from 'bullmq';
-import IORedis from 'ioredis';
+import { redis } from '../config/redis.js';
 
-const connection = new IORedis(process.env.REDIS_URL, {
-  maxRetriesPerRequest: null,
+export const videoQueue = new Queue('video', {
+  connection: redis,
 });
 
-export const videoQueue = new Queue('video-processing', {
-  connection,
-});
+export const enqueueVideo = (lessonId, rawKey) =>
+  videoQueue.add(
+    'transcode',
+    {
+      lessonId,
+      rawKey,
+    },
+    {
+      attempts: 3,
+      backoff: {
+        type: 'exponential',
+        delay: 5000,
+      },
+      removeOnComplete: true,
+      removeOnFail: 100,
+    }
+  );

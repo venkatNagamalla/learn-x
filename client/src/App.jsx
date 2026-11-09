@@ -12,6 +12,7 @@ import Login from './pages/Login.jsx';
 import Register from './pages/Register.jsx';
 import Courses from './pages/Courses.jsx';
 import CourseDetail from './pages/CourseDetail.jsx';
+import StudentLearning from './pages/StudentLearning.jsx';
 import InstructorCourses from './pages/InstructorCourses.jsx';
 import InstructorCourseForm from './pages/InstructorCourseForm.jsx';
 import CurriculumEditor from './pages/CurriculumEditor.jsx';
@@ -74,6 +75,11 @@ export default function App() {
 
         {/* Student Routes */}
         <Route element={<ProtectedRoute roles={['student']} />}>
+          <Route
+            path="/student/courses/:courseId/learn"
+            element={<StudentLearning />}
+          />
+
           <Route
             path="/student/*"
             element={<StudentDashboard />}

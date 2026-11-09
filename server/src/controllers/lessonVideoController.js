@@ -10,7 +10,7 @@ import Lesson from '../models/Lesson.js';
 import Course from '../models/Course.js';
 
 import { s3 } from '../config/s3.js';
-import { videoQueue } from '../queues/videoQueue.js';
+import { videoQueue, enqueueVideo } from '../queues/videoQueue.js';
 
 import { assertOwner } from '../utils/assertOwner.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
@@ -189,6 +189,91 @@ export const completeLessonUpload = asyncHandler(
 
     res.status(202).json({
       message: 'Video uploaded successfully. Processing has been queued.',
+      processingStatus: lesson.processingStatus,
+    });
+  }
+);
+
+// GET /api/lessons/:id/status
+export const getLessonProcessingStatus = asyncHandler(
+  async (req, res) => {
+    const lesson = await getOwnedLesson(
+      req.params.id,
+      req.user
+    );
+
+    res.json({
+      lessonId: String(lesson._id),
+      processingStatus: lesson.processingStatus,
+      duration: lesson.duration,
+      hlsPath: lesson.hlsPath,
+    });
+  }
+);
+
+// POST /api/lessons/:id/retry
+export const retryLessonProcessing = asyncHandler(
+  async (req, res) => {
+    const lesson = await getOwnedLesson(
+      req.params.id,
+      req.user
+    );
+
+    if (lesson.processingStatus !== 'failed') {
+      throw new ApiError(
+        400,
+        'Only failed video processing jobs can be retried'
+      );
+    }
+
+    if (!lesson.rawKey) {
+      throw new ApiError(
+        400,
+        'Original video not found. Please upload the video again.'
+      );
+    }
+
+    // Confirm that the original video still exists in S3
+    try {
+      await s3.send(
+        new HeadObjectCommand({
+          Bucket: process.env.AWS_S3_RAW_BUCKET,
+          Key: lesson.rawKey,
+        })
+      );
+    } catch (error) {
+      if (
+        error.name === 'NotFound' ||
+        error.name === 'NoSuchKey' ||
+        error.$metadata?.httpStatusCode === 404
+      ) {
+        throw new ApiError(
+          400,
+          'Original video is missing from S3. Please upload it again.'
+        );
+      }
+
+      throw error;
+    }
+
+    // Reset status before adding a fresh processing job
+    lesson.processingStatus = 'uploaded';
+    await lesson.save();
+
+    try {
+      await enqueueVideo(
+        String(lesson._id),
+        lesson.rawKey
+      );
+    } catch (error) {
+      lesson.processingStatus = 'failed';
+      await lesson.save();
+
+      throw error;
+    }
+
+    res.status(202).json({
+      message: 'Video processing retry has been queued',
       processingStatus: lesson.processingStatus,
     });
   }

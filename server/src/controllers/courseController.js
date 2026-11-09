@@ -117,11 +117,13 @@ export const getInstructorCourseCurriculum = asyncHandler(
       .sort({ order: 1 })
       .lean();
 
-    // Return only safe lesson fields
+    // Return safe lesson fields including video processing information
     const lessons = await Lesson.find({
       course: course._id,
     })
-      .select('section title description duration isPreview order')
+      .select(
+        'section title description duration isPreview order processingStatus hlsPath'
+      )
       .sort({ order: 1 })
       .lean();
 
@@ -143,6 +145,8 @@ export const getInstructorCourseCurriculum = asyncHandler(
             duration: lesson.duration,
             isPreview: lesson.isPreview,
             order: lesson.order,
+            processingStatus: lesson.processingStatus,
+            hlsPath: lesson.hlsPath,
           })),
       })),
     });

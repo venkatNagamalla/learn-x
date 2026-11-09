@@ -9,6 +9,7 @@ import authRoutes from './routes/authRoutes.js';
 import courseRoutes from './routes/courseRoutes.js';
 import adminRoutes from './routes/adminRoutes.js';
 import lessonRoutes from './routes/lessonRoutes.js';
+import studentLessonRoutes from './routes/studentLessonRoutes.js';
 
 const app = express();
 
@@ -41,7 +42,10 @@ app.use('/api/courses', courseRoutes);
 // Admin routes
 app.use('/api/admin', adminRoutes);
 
-// Lesson video upload routes
+// Student lesson playback routes
+app.use('/api/student/lessons', studentLessonRoutes);
+
+// Instructor lesson video upload routes
 app.use('/api/lessons', lessonRoutes);
 
 // Global error handler

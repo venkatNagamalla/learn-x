@@ -40,6 +40,12 @@ export default function CourseDetail() {
     error,
   } = useSelector((state) => state.courses);
 
+  const user = useSelector((state) => state.auth.user);
+
+  const isStudent = user?.role === 'student';
+  const isLoggedIn = Boolean(user);
+  const isFreeCourse = Number(selectedCourse?.price || 0) === 0;
+
   useEffect(() => {
     dispatch(fetchCourseById(id));
 
@@ -80,7 +86,6 @@ export default function CourseDetail() {
   return (
     <main className="min-h-screen bg-slate-50 px-4 py-10 sm:px-6 lg:px-10">
       <div className="mx-auto max-w-6xl">
-
         <Link
           to="/courses"
           className="mb-6 inline-block text-sm font-medium text-indigo-600 hover:underline"
@@ -90,7 +95,6 @@ export default function CourseDetail() {
 
         {/* Course overview */}
         <div className="grid gap-8 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm lg:grid-cols-5 lg:p-8">
-
           <div className="lg:col-span-3">
             <div className="mb-4 flex flex-wrap gap-2">
               <span className="rounded-full bg-indigo-50 px-3 py-1 text-sm text-indigo-700">
@@ -127,7 +131,7 @@ export default function CourseDetail() {
             </div>
           </div>
 
-          {/* Purchase card */}
+          {/* Course action card */}
           <div className="lg:col-span-2">
             <img
               src={
@@ -143,10 +147,36 @@ export default function CourseDetail() {
                 {formatPrice(selectedCourse.price)}
               </p>
 
+              {isStudent && (
+                <Link
+                  to={`/student/courses/${selectedCourse._id}/learn`}
+                  className="mt-5 block w-full rounded-lg bg-indigo-600 px-6 py-3 text-center font-semibold text-white transition hover:bg-indigo-700"
+                >
+                  {isFreeCourse
+                    ? 'Start Learning'
+                    : 'Watch Preview Lessons'}
+                </Link>
+              )}
+
+              {!isLoggedIn && (
+                <Link
+                  to="/login"
+                  className="mt-5 block w-full rounded-lg bg-indigo-600 px-6 py-3 text-center font-semibold text-white transition hover:bg-indigo-700"
+                >
+                  Log in to watch lessons
+                </Link>
+              )}
+
+              {isLoggedIn && !isStudent && (
+                <p className="mt-5 rounded-lg bg-slate-100 px-4 py-3 text-center text-sm text-slate-600">
+                  Student access is required to watch lessons.
+                </p>
+              )}
+
               <button
                 type="button"
                 disabled
-                className="mt-5 w-full cursor-not-allowed rounded-lg bg-indigo-600 px-6 py-3 font-semibold text-white opacity-70"
+                className="mt-3 w-full cursor-not-allowed rounded-lg bg-slate-200 px-6 py-3 font-semibold text-slate-500"
                 title="Payment integration will be added in Phase 4"
               >
                 Buy Course

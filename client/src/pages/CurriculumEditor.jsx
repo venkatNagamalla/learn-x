@@ -1,3 +1,4 @@
+
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
@@ -8,6 +9,22 @@ const emptyLesson = {
   description: '',
   duration: 0,
   isPreview: false,
+};
+
+const MAX_FILE_SIZE = 200 * 1024 * 1024;
+
+const ALLOWED_VIDEO_TYPES = [
+  'video/mp4',
+  'video/quicktime',
+  'video/webm',
+];
+
+const STATUS_STYLES = {
+  none: 'bg-slate-100 text-slate-600',
+  uploaded: 'bg-amber-100 text-amber-800',
+  processing: 'bg-blue-100 text-blue-800',
+  ready: 'bg-green-100 text-green-800',
+  failed: 'bg-red-100 text-red-700',
 };
 
 export default function CurriculumEditor() {
@@ -26,6 +43,13 @@ export default function CurriculumEditor() {
   const [newLessons, setNewLessons] = useState({});
   const [editingLesson, setEditingLesson] = useState(null);
   const [busy, setBusy] = useState(false);
+
+  // VIDEO UPLOAD STATE
+  const [selectedVideoFiles, setSelectedVideoFiles] = useState({});
+  const [uploadingLessonId, setUploadingLessonId] = useState(null);
+  const [uploadProgress, setUploadProgress] = useState({});
+  const [uploadFeedback, setUploadFeedback] = useState({});
+  const [retryingLessonId, setRetryingLessonId] = useState(null);
 
   const loadCurriculum = useCallback(async () => {
     try {
@@ -50,6 +74,68 @@ export default function CurriculumEditor() {
   useEffect(() => {
     loadCurriculum();
   }, [loadCurriculum]);
+
+  // POLL VIDEO STATUS EVERY 5 SECONDS
+  useEffect(() => {
+    const pendingLessons = sections.flatMap((section) =>
+      (section.lessons || [])
+        .filter((lesson) =>
+          ['uploaded', 'processing'].includes(
+            lesson.processingStatus
+          )
+        )
+        .map((lesson) => lesson._id)
+    );
+
+    if (pendingLessons.length === 0) {
+      return undefined;
+    }
+
+    let cancelled = false;
+
+    const pollStatuses = async () => {
+      await Promise.all(
+        pendingLessons.map(async (lessonId) => {
+          try {
+            const { data } = await api.get(
+              `/lessons/${lessonId}/status`
+            );
+
+            if (cancelled) return;
+
+            setSections((previous) =>
+              previous.map((section) => ({
+                ...section,
+                lessons: (section.lessons || []).map((lesson) =>
+                  lesson._id === lessonId
+                    ? {
+                        ...lesson,
+                        processingStatus: data.processingStatus,
+                        duration: data.duration || lesson.duration,
+                      }
+                    : lesson
+                ),
+              }))
+            );
+          } catch (error) {
+            if (!cancelled) {
+              console.error(
+                `Failed to poll lesson ${lessonId}:`,
+                error.response?.data?.message || error.message
+              );
+            }
+          }
+        })
+      );
+    };
+
+    const intervalId = window.setInterval(pollStatuses, 5000);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(intervalId);
+    };
+  }, [sections]);
 
   // SECTION MANAGEMENT
 
@@ -308,6 +394,223 @@ export default function CurriculumEditor() {
     }
   };
 
+  // UPDATE A LESSON'S STATUS IN THE UI
+
+  const updateLessonStatus = (lessonId, status) => {
+    setSections((previous) =>
+      previous.map((section) => ({
+        ...section,
+        lessons: (section.lessons || []).map((lesson) =>
+          lesson._id === lessonId
+            ? { ...lesson, processingStatus: status }
+            : lesson
+        ),
+      }))
+    );
+  };
+
+  // VIDEO FILE SELECTION
+
+  const handleVideoFileChange = (lessonId, event) => {
+    const file = event.target.files?.[0] || null;
+
+    setSelectedVideoFiles((previous) => ({
+      ...previous,
+      [lessonId]: file,
+    }));
+
+    setUploadFeedback((previous) => ({
+      ...previous,
+      [lessonId]: '',
+    }));
+
+    setUploadProgress((previous) => ({
+      ...previous,
+      [lessonId]: 0,
+    }));
+
+    event.target.value = '';
+  };
+
+  // UPLOAD FILE TO S3 WITH REAL-TIME PROGRESS
+
+  const uploadFileToS3 = (uploadUrl, file, lessonId) =>
+    new Promise((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+
+      xhr.open('PUT', uploadUrl);
+
+      xhr.setRequestHeader('Content-Type', file.type);
+
+      xhr.upload.addEventListener('progress', (event) => {
+        if (event.lengthComputable) {
+          const percentage = Math.round(
+            (event.loaded / event.total) * 100
+          );
+
+          setUploadProgress((previous) => ({
+            ...previous,
+            [lessonId]: percentage,
+          }));
+        }
+      });
+
+      xhr.addEventListener('load', () => {
+        if (xhr.status >= 200 && xhr.status < 300) {
+          resolve();
+        } else {
+          reject(
+            new Error(
+              `S3 upload failed (${xhr.status}). ${
+                xhr.responseText || 'Please check your AWS configuration.'
+              }`
+            )
+          );
+        }
+      });
+
+      xhr.addEventListener('error', () => {
+        reject(new Error('Network error while uploading video to S3.'));
+      });
+
+      xhr.addEventListener('abort', () => {
+        reject(new Error('Video upload was cancelled.'));
+      });
+
+      xhr.send(file);
+    });
+
+  // VIDEO UPLOAD TO AWS S3
+
+  const uploadLessonVideo = async (lessonId) => {
+    const file = selectedVideoFiles[lessonId];
+
+    if (!file) {
+      toast.error('Please select a video first.');
+      return;
+    }
+
+    if (!ALLOWED_VIDEO_TYPES.includes(file.type)) {
+      toast.error('Only MP4, MOV and WEBM videos are allowed.');
+      return;
+    }
+
+    if (file.size <= 0 || file.size > MAX_FILE_SIZE) {
+      toast.error(
+        'Video size must be greater than 0 and no more than 200 MB.'
+      );
+      return;
+    }
+
+    try {
+      setUploadingLessonId(lessonId);
+
+      setUploadProgress((previous) => ({
+        ...previous,
+        [lessonId]: 0,
+      }));
+
+      // STEP 1: Request a presigned S3 upload URL.
+
+      setUploadFeedback((previous) => ({
+        ...previous,
+        [lessonId]: 'Generating secure upload URL...',
+      }));
+
+      const { data } = await api.post(
+        `/lessons/${lessonId}/upload-url`,
+        {
+          contentType: file.type,
+          fileSize: file.size,
+        }
+      );
+
+      if (!data.uploadUrl) {
+        throw new Error('Upload URL was not returned by the server.');
+      }
+
+      // STEP 2: Upload directly to S3 with progress tracking.
+
+      setUploadFeedback((previous) => ({
+        ...previous,
+        [lessonId]: 'Uploading video to AWS S3...',
+      }));
+
+      await uploadFileToS3(data.uploadUrl, file, lessonId);
+
+      // STEP 3: Verify upload and queue processing.
+
+      setUploadFeedback((previous) => ({
+        ...previous,
+        [lessonId]: 'Verifying video and starting processing...',
+      }));
+
+      const { data: completeData } = await api.post(
+        `/lessons/${lessonId}/upload-complete`
+      );
+
+      setSelectedVideoFiles((previous) => ({
+        ...previous,
+        [lessonId]: null,
+      }));
+
+      updateLessonStatus(lessonId, 'uploaded');
+
+      setUploadFeedback((previous) => ({
+        ...previous,
+        [lessonId]:
+          completeData.message ||
+          'Video uploaded successfully. Processing has been queued.',
+      }));
+
+      toast.success('Video uploaded and processing queued!');
+    } catch (error) {
+      const message =
+        error.response?.data?.message ||
+        error.message ||
+        'Video upload failed.';
+
+      setUploadFeedback((previous) => ({
+        ...previous,
+        [lessonId]: `Upload failed: ${message}`,
+      }));
+
+      toast.error(message);
+    } finally {
+      setUploadingLessonId(null);
+    }
+  };
+
+  // RETRY FAILED VIDEO PROCESSING
+
+  const retryLessonVideo = async (lessonId) => {
+    try {
+      setRetryingLessonId(lessonId);
+
+      const { data } = await api.post(
+        `/lessons/${lessonId}/retry`
+      );
+
+      updateLessonStatus(lessonId, 'uploaded');
+
+      setUploadFeedback((previous) => ({
+        ...previous,
+        [lessonId]:
+          data.message || 'Video processing retry has been queued.',
+      }));
+
+      toast.success('Video processing retry queued!');
+    } catch (error) {
+      const message =
+        error.response?.data?.message ||
+        'Failed to retry video processing.';
+
+      toast.error(message);
+    } finally {
+      setRetryingLessonId(null);
+    }
+  };
+
   if (loading) {
     return (
       <div className="py-20 text-center text-slate-600">
@@ -475,153 +778,275 @@ export default function CurriculumEditor() {
               {/* LESSON LIST */}
 
               <div className="mt-5 space-y-3">
-                {(section.lessons || []).map((lesson, lessonIndex) => (
-                  <div
-                    key={lesson._id}
-                    className="rounded-lg border border-slate-200 bg-slate-50 p-4"
-                  >
-                    {editingLesson?._id === lesson._id ? (
-                      <div className="space-y-3">
-                        <input
-                          value={editingLesson.title}
-                          onChange={(event) =>
-                            setEditingLesson((previous) => ({
-                              ...previous,
-                              title: event.target.value,
-                            }))
-                          }
-                          placeholder="Lesson title"
-                          className="w-full rounded-lg border border-slate-300 px-3 py-2"
-                        />
+                {(section.lessons || []).map((lesson, lessonIndex) => {
+                  const videoStatus = lesson.processingStatus || 'none';
 
-                        <textarea
-                          value={editingLesson.description}
-                          onChange={(event) =>
-                            setEditingLesson((previous) => ({
-                              ...previous,
-                              description: event.target.value,
-                            }))
-                          }
-                          placeholder="Lesson description"
-                          className="w-full rounded-lg border border-slate-300 px-3 py-2"
-                        />
-
-                        <input
-                          type="number"
-                          min="0"
-                          value={editingLesson.duration}
-                          onChange={(event) =>
-                            setEditingLesson((previous) => ({
-                              ...previous,
-                              duration: event.target.value,
-                            }))
-                          }
-                          placeholder="Duration in minutes"
-                          className="w-full rounded-lg border border-slate-300 px-3 py-2"
-                        />
-
-                        <label className="flex items-center gap-2 text-sm">
+                  return (
+                    <div
+                      key={lesson._id}
+                      className="rounded-lg border border-slate-200 bg-slate-50 p-4"
+                    >
+                      {editingLesson?._id === lesson._id ? (
+                        <div className="space-y-3">
                           <input
-                            type="checkbox"
-                            checked={editingLesson.isPreview}
+                            value={editingLesson.title}
                             onChange={(event) =>
                               setEditingLesson((previous) => ({
                                 ...previous,
-                                isPreview: event.target.checked,
+                                title: event.target.value,
                               }))
                             }
+                            placeholder="Lesson title"
+                            className="w-full rounded-lg border border-slate-300 px-3 py-2"
                           />
-                          Free preview lesson
-                        </label>
 
-                        <div className="flex gap-2">
-                          <button
-                            type="button"
-                            disabled={busy}
-                            onClick={updateLesson}
-                            className="rounded-lg bg-green-600 px-4 py-2 text-sm font-semibold text-white"
-                          >
-                            Save Lesson
-                          </button>
+                          <textarea
+                            value={editingLesson.description}
+                            onChange={(event) =>
+                              setEditingLesson((previous) => ({
+                                ...previous,
+                                description: event.target.value,
+                              }))
+                            }
+                            placeholder="Lesson description"
+                            className="w-full rounded-lg border border-slate-300 px-3 py-2"
+                          />
 
-                          <button
-                            type="button"
-                            onClick={() => setEditingLesson(null)}
-                            className="rounded-lg border border-slate-300 px-4 py-2 text-sm"
-                          >
-                            Cancel
-                          </button>
+                          <input
+                            type="number"
+                            min="0"
+                            value={editingLesson.duration}
+                            onChange={(event) =>
+                              setEditingLesson((previous) => ({
+                                ...previous,
+                                duration: event.target.value,
+                              }))
+                            }
+                            placeholder="Duration in minutes"
+                            className="w-full rounded-lg border border-slate-300 px-3 py-2"
+                          />
+
+                          <label className="flex items-center gap-2 text-sm">
+                            <input
+                              type="checkbox"
+                              checked={editingLesson.isPreview}
+                              onChange={(event) =>
+                                setEditingLesson((previous) => ({
+                                  ...previous,
+                                  isPreview: event.target.checked,
+                                }))
+                              }
+                            />
+                            Free preview lesson
+                          </label>
+
+                          <div className="flex gap-2">
+                            <button
+                              type="button"
+                              disabled={busy}
+                              onClick={updateLesson}
+                              className="rounded-lg bg-green-600 px-4 py-2 text-sm font-semibold text-white"
+                            >
+                              Save Lesson
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => setEditingLesson(null)}
+                              className="rounded-lg border border-slate-300 px-4 py-2 text-sm"
+                            >
+                              Cancel
+                            </button>
+                          </div>
                         </div>
-                      </div>
-                    ) : (
-                      <div className="flex flex-wrap items-center justify-between gap-3">
-                        <div>
-                          <p className="font-medium text-slate-800">
-                            {lessonIndex + 1}. {lesson.title}
-                          </p>
-
-                          {lesson.description && (
-                            <p className="mt-1 text-sm text-slate-500">
-                              {lesson.description}
+                      ) : (
+                        <div className="flex flex-wrap items-center justify-between gap-3">
+                          <div>
+                            <p className="font-medium text-slate-800">
+                              {lessonIndex + 1}. {lesson.title}
                             </p>
-                          )}
 
-                          <p className="mt-1 text-xs text-slate-500">
-                            {lesson.duration || 0} minutes
-                            {lesson.isPreview && (
-                              <span className="ml-2 rounded-full bg-green-100 px-2 py-1 font-medium text-green-700">
-                                Preview
-                              </span>
+                            {lesson.description && (
+                              <p className="mt-1 text-sm text-slate-500">
+                                {lesson.description}
+                              </p>
                             )}
-                          </p>
+
+                            <p className="mt-1 text-xs text-slate-500">
+                              {lesson.duration || 0} minutes
+                              {lesson.isPreview && (
+                                <span className="ml-2 rounded-full bg-green-100 px-2 py-1 font-medium text-green-700">
+                                  Preview
+                                </span>
+                              )}
+                            </p>
+                          </div>
+
+                          <div className="flex flex-wrap gap-2">
+                            <button
+                              type="button"
+                              disabled={busy || lessonIndex === 0}
+                              onClick={() => moveLesson(section, lessonIndex, -1)}
+                              className="rounded-lg border border-slate-300 px-3 py-2 text-sm disabled:opacity-40"
+                            >
+                              ↑
+                            </button>
+
+                            <button
+                              type="button"
+                              disabled={
+                                busy ||
+                                lessonIndex === section.lessons.length - 1
+                              }
+                              onClick={() => moveLesson(section, lessonIndex, 1)}
+                              className="rounded-lg border border-slate-300 px-3 py-2 text-sm disabled:opacity-40"
+                            >
+                              ↓
+                            </button>
+
+                            <button
+                              type="button"
+                              disabled={busy}
+                              onClick={() =>
+                                startEditingLesson(lesson, section._id)
+                              }
+                              className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                            >
+                              Edit
+                            </button>
+
+                            <button
+                              type="button"
+                              disabled={busy}
+                              onClick={() => deleteLesson(lesson._id)}
+                              className="rounded-lg border border-red-200 px-3 py-2 text-sm text-red-600"
+                            >
+                              Delete
+                            </button>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* VIDEO UPLOAD */}
+
+                      <div className="mt-4 border-t border-slate-200 pt-4">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <h4 className="text-sm font-semibold text-slate-800">
+                            Lesson Video
+                          </h4>
+
+                          <span
+                            className={`rounded-full px-3 py-1 text-xs font-semibold capitalize ${STATUS_STYLES[videoStatus] || STATUS_STYLES.none}`}
+                          >
+                            {videoStatus}
+                          </span>
                         </div>
 
-                        <div className="flex flex-wrap gap-2">
-                          <button
-                            type="button"
-                            disabled={busy || lessonIndex === 0}
-                            onClick={() => moveLesson(section, lessonIndex, -1)}
-                            className="rounded-lg border border-slate-300 px-3 py-2 text-sm disabled:opacity-40"
-                          >
-                            ↑
-                          </button>
+                        <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-center">
+                          <input
+                            type="file"
+                            accept="video/mp4,video/quicktime,video/webm"
+                            disabled={
+                              busy || uploadingLessonId !== null
+                            }
+                            onChange={(event) =>
+                              handleVideoFileChange(lesson._id, event)
+                            }
+                            className="block w-full text-sm text-slate-600 file:mr-3 file:rounded-lg file:border-0 file:bg-indigo-50 file:px-4 file:py-2 file:font-medium file:text-indigo-700 hover:file:bg-indigo-100"
+                          />
 
                           <button
                             type="button"
                             disabled={
                               busy ||
-                              lessonIndex === section.lessons.length - 1
+                              uploadingLessonId !== null ||
+                              !selectedVideoFiles[lesson._id]
                             }
-                            onClick={() => moveLesson(section, lessonIndex, 1)}
-                            className="rounded-lg border border-slate-300 px-3 py-2 text-sm disabled:opacity-40"
+                            onClick={() => uploadLessonVideo(lesson._id)}
+                            className="shrink-0 rounded-lg bg-indigo-600 px-5 py-2 text-sm font-semibold text-white hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50"
                           >
-                            ↓
-                          </button>
-
-                          <button
-                            type="button"
-                            disabled={busy}
-                            onClick={() =>
-                              startEditingLesson(lesson, section._id)
-                            }
-                            className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
-                          >
-                            Edit
-                          </button>
-
-                          <button
-                            type="button"
-                            disabled={busy}
-                            onClick={() => deleteLesson(lesson._id)}
-                            className="rounded-lg border border-red-200 px-3 py-2 text-sm text-red-600"
-                          >
-                            Delete
+                            {uploadingLessonId === lesson._id
+                              ? 'Uploading...'
+                              : 'Upload Video'}
                           </button>
                         </div>
+
+                        {/* UPLOAD PROGRESS BAR */}
+
+                        {uploadingLessonId === lesson._id && (
+                          <div className="mt-4">
+                            <div className="mb-1 flex justify-between text-xs font-medium text-slate-600">
+                              <span>Upload progress</span>
+                              <span>
+                                {uploadProgress[lesson._id] || 0}%
+                              </span>
+                            </div>
+
+                            <div
+                              className="h-3 w-full overflow-hidden rounded-full bg-slate-200"
+                              role="progressbar"
+                              aria-valuenow={uploadProgress[lesson._id] || 0}
+                              aria-valuemin="0"
+                              aria-valuemax="100"
+                            >
+                              <div
+                                className="h-full rounded-full bg-indigo-600 transition-all duration-200"
+                                style={{
+                                  width: `${uploadProgress[lesson._id] || 0}%`,
+                                }}
+                              />
+                            </div>
+                          </div>
+                        )}
+
+                        {selectedVideoFiles[lesson._id] && (
+                          <p className="mt-2 text-xs text-slate-500">
+                            Selected: {selectedVideoFiles[lesson._id].name}
+                            {' '}(
+                            {(
+                              selectedVideoFiles[lesson._id].size /
+                              (1024 * 1024)
+                            ).toFixed(2)} MB)
+                          </p>
+                        )}
+
+                        {uploadFeedback[lesson._id] && (
+                          <p className="mt-3 break-words text-sm text-indigo-700">
+                            {uploadFeedback[lesson._id]}
+                          </p>
+                        )}
+
+                        {/* RETRY BUTTON */}
+
+                        {videoStatus === 'failed' && (
+                          <button
+                            type="button"
+                            disabled={
+                              retryingLessonId !== null ||
+                              uploadingLessonId !== null
+                            }
+                            onClick={() => retryLessonVideo(lesson._id)}
+                            className="mt-3 rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
+                          >
+                            {retryingLessonId === lesson._id
+                              ? 'Retrying...'
+                              : 'Retry Processing'}
+                          </button>
+                        )}
+
+                        {['uploaded', 'processing'].includes(videoStatus) && (
+                          <p className="mt-3 text-xs text-blue-700">
+                            Video processing is in progress. Status refreshes automatically every 5 seconds.
+                          </p>
+                        )}
+
+                        <p className="mt-2 text-xs text-slate-500">
+                          Supported formats: MP4, MOV and WEBM. Maximum size: 200 MB.
+                        </p>
                       </div>
-                    )}
-                  </div>
-                ))}
+                    </div>
+                  );
+                })}
 
                 {(section.lessons || []).length === 0 && (
                   <p className="text-sm text-slate-500">
