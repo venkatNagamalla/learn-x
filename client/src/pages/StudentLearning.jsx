@@ -1,5 +1,5 @@
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 
 import api from '../api/axios';
@@ -10,14 +10,21 @@ export default function StudentLearning() {
 
   const [course, setCourse] = useState(null);
   const [sections, setSections] = useState([]);
+  const [isEnrolled, setIsEnrolled] = useState(false);
   const [selectedLesson, setSelectedLesson] = useState(null);
   const [playbackUrl, setPlaybackUrl] = useState('');
+  const [resumeAt, setResumeAt] = useState(0);
 
   const [courseLoading, setCourseLoading] = useState(true);
   const [playbackLoading, setPlaybackLoading] = useState(false);
   const [error, setError] = useState('');
 
-  // Fetch course details and curriculum.
+  const [playbackProgress, setPlaybackProgress] = useState({
+    currentTime: 0,
+    duration: 0,
+  });
+
+  // Fetch course details, curriculum, and enrollment status.
   useEffect(() => {
     let cancelled = false;
 
@@ -32,6 +39,7 @@ export default function StudentLearning() {
 
         setCourse(data.course);
         setSections(data.sections);
+        setIsEnrolled(Boolean(data.isEnrolled));
       } catch (err) {
         if (!cancelled) {
           setError(
@@ -53,19 +61,38 @@ export default function StudentLearning() {
     };
   }, [courseId]);
 
-  // Request secure playback access for the selected lesson.
+  // Request playback access and retrieve saved progress.
   const handleSelectLesson = async (lesson) => {
     try {
       setSelectedLesson(lesson);
       setPlaybackUrl('');
+      setResumeAt(0);
       setError('');
+
+      setPlaybackProgress({
+        currentTime: 0,
+        duration: 0,
+      });
+
       setPlaybackLoading(true);
 
-      const { data } = await api.get(
-        `/student/lessons/${lesson._id}/playback`
-      );
+      const [playbackResponse, progressResponse] =
+        await Promise.all([
+          api.get(`/student/lessons/${lesson._id}/playback`),
+          api.get(`/progress/lessons/${lesson._id}`),
+        ]);
 
-      setPlaybackUrl(data.playback.masterUrl);
+      setPlaybackUrl(playbackResponse.data.playback.masterUrl);
+
+      const savedSeconds =
+        progressResponse.data.watchedSeconds || 0;
+
+      setResumeAt(savedSeconds);
+
+      setPlaybackProgress({
+        currentTime: savedSeconds,
+        duration: 0,
+      });
     } catch (err) {
       setError(
         err.response?.data?.message ||
@@ -74,6 +101,46 @@ export default function StudentLearning() {
     } finally {
       setPlaybackLoading(false);
     }
+  };
+
+  // Receive playback progress and save it to the backend.
+  const handleProgress = useCallback(
+    async (progress) => {
+      setPlaybackProgress(progress);
+
+      if (
+        !selectedLesson ||
+        progress.currentTime <= 0 ||
+        progress.duration <= 0
+      ) {
+        return;
+      }
+
+      try {
+        await api.put(
+          `/progress/lessons/${selectedLesson._id}`,
+          {
+            watchedSeconds: progress.currentTime,
+            duration: progress.duration,
+          }
+        );
+      } catch (err) {
+        console.error(
+          'Unable to save lesson progress:',
+          err.response?.data?.message || err.message
+        );
+      }
+    },
+    [selectedLesson]
+  );
+
+  const formatTime = (seconds) => {
+    if (!Number.isFinite(seconds)) return '0:00';
+
+    const minutes = Math.floor(seconds / 60);
+    const remainingSeconds = Math.floor(seconds % 60);
+
+    return `${minutes}:${String(remainingSeconds).padStart(2, '0')}`;
   };
 
   if (courseLoading) {
@@ -136,7 +203,20 @@ export default function StudentLearning() {
                       Preparing video...
                     </div>
                   ) : playbackUrl ? (
-                    <VideoPlayer src={playbackUrl} />
+                    <>
+                      <VideoPlayer
+                        masterUrl={playbackUrl}
+                        startAt={resumeAt}
+                        onProgress={handleProgress}
+                      />
+
+                      <p className="mt-3 text-sm text-slate-500">
+                        Playback progress:{' '}
+                        {formatTime(playbackProgress.currentTime)}
+                        {' / '}
+                        {formatTime(playbackProgress.duration)}
+                      </p>
+                    </>
                   ) : (
                     <div className="flex aspect-video items-center justify-center rounded-xl bg-slate-900 p-6 text-center text-slate-300">
                       {error || 'Video is not available.'}
@@ -177,7 +257,9 @@ export default function StudentLearning() {
                   <div className="space-y-2">
                     {section.lessons.map((lesson) => {
                       const isLocked =
-                        course.price > 0 && !lesson.isPreview;
+                        course.price > 0 &&
+                        !lesson.isPreview &&
+                        !isEnrolled;
 
                       const isSelected =
                         selectedLesson?._id === lesson._id;

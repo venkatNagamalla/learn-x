@@ -20,6 +20,7 @@ import {
 
 import {
   protect,
+  optionalProtect,
   requireRole,
 } from '../middleware/auth.js';
 
@@ -28,7 +29,10 @@ const router = express.Router();
 // Public routes
 router.get('/', getCourses);
 router.get('/mine', protect, requireRole('instructor'), getMyCourses);
-router.get('/:id', getCourseById);
+
+// Public course details with optional authentication.
+// Authenticated students receive their enrollment status.
+router.get('/:id', optionalProtect, getCourseById);
 
 // Instructor-only routes
 router.use(protect, requireRole('instructor'));

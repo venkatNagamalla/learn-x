@@ -2,6 +2,8 @@
 import Course from '../models/Course.js';
 import Section from '../models/Section.js';
 import Lesson from '../models/Lesson.js';
+import Enrollment from '../models/Enrollment.js';
+
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { ApiError } from '../utils/ApiError.js';
 import { assertOwner } from '../utils/assertOwner.js';
@@ -65,9 +67,21 @@ export const getCourseById = asyncHandler(async (req, res) => {
     throw new ApiError(404, 'Course not found');
   }
 
+  // Check whether the authenticated user is enrolled.
+  const isEnrolled = req.user
+    ? Boolean(
+        await Enrollment.exists({
+          user: req.user._id,
+          course: course._id,
+        })
+      )
+    : false;
+
   const sections = await Section.find({
     course: course._id,
-  }).sort({ order: 1 }).lean();
+  })
+    .sort({ order: 1 })
+    .lean();
 
   const lessons = await Lesson.find({
     course: course._id,
@@ -78,6 +92,7 @@ export const getCourseById = asyncHandler(async (req, res) => {
 
   res.json({
     course,
+    isEnrolled,
     sections: sections.map((section) => ({
       _id: section._id,
       title: section.title,
@@ -108,7 +123,6 @@ export const getInstructorCourseCurriculum = asyncHandler(
       throw new ApiError(404, 'Course not found');
     }
 
-    // Verify that the logged-in instructor owns this course
     assertOwner(course, req.user);
 
     const sections = await Section.find({
@@ -117,7 +131,6 @@ export const getInstructorCourseCurriculum = asyncHandler(
       .sort({ order: 1 })
       .lean();
 
-    // Return safe lesson fields including video processing information
     const lessons = await Lesson.find({
       course: course._id,
     })

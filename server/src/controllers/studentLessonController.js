@@ -3,6 +3,7 @@ import mongoose from 'mongoose';
 
 import Course from '../models/Course.js';
 import Lesson from '../models/Lesson.js';
+import Enrollment from '../models/Enrollment.js';
 
 import { createSignedLessonAccess } from '../config/cloudfront.js';
 
@@ -36,13 +37,36 @@ export const getStudentLessonPlayback = asyncHandler(
       throw new ApiError(404, 'Published course not found');
     }
 
-    // Paid course access:
-    // Until enrollment is implemented, only preview lessons
-    // are available in paid courses.
-    if (course.price > 0 && !lesson.isPreview) {
+    const user = req.user;
+
+    // Check whether the user is the instructor or admin
+    const isInstructor =
+      String(course.instructor) === String(user._id);
+
+    const isAdmin = user.role === 'admin';
+
+    // Check student enrollment
+    const isEnrolled =
+      user.role === 'student' &&
+      Boolean(
+        await Enrollment.exists({
+          user: user._id,
+          course: course._id,
+        })
+      );
+
+    // Allow preview lessons, enrolled students,
+    // course instructors, and administrators
+    const hasAccess =
+      lesson.isPreview ||
+      isEnrolled ||
+      isInstructor ||
+      isAdmin;
+
+    if (!hasAccess) {
       throw new ApiError(
         403,
-        'Please purchase this course to watch this lesson'
+        'Please enroll in this course to watch this lesson'
       );
     }
 
@@ -54,7 +78,7 @@ export const getStudentLessonPlayback = asyncHandler(
       );
     }
 
-    // Verify that the stored HLS path matches this lesson.
+    // Verify stored HLS path
     const expectedHlsPath =
       `lessons/${lesson._id}/master.m3u8`;
 
@@ -65,7 +89,7 @@ export const getStudentLessonPlayback = asyncHandler(
       );
     }
 
-    // Generate a signed URL for the complete lesson folder
+    // Generate signed URL for the complete lesson folder
     const playback = createSignedLessonAccess(
       lesson._id.toString()
     );

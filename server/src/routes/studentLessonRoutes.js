@@ -12,8 +12,12 @@ import {
 
 const router = express.Router();
 
-// Only authenticated students can access playback
-router.use(protect, requireRole('student'));
+// Only authenticated students, instructors, and admins
+// can access the playback endpoint.
+router.use(
+  protect,
+  requireRole('student', 'instructor', 'admin')
+);
 
 // Generate signed CloudFront playback access
 router.get('/:id/playback', getStudentLessonPlayback);
