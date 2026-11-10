@@ -62,7 +62,6 @@ export default function InstructorCourses() {
   return (
     <main className="min-h-screen bg-slate-50 px-4 py-10 sm:px-6 lg:px-10">
       <div className="mx-auto max-w-6xl">
-
         <div className="mb-8 flex flex-wrap items-center justify-between gap-4">
           <div>
             <p className="text-sm font-semibold uppercase tracking-wider text-indigo-600">
@@ -162,6 +161,13 @@ export default function InstructorCourses() {
                       Manage Curriculum
                     </Link>
 
+                    <Link
+                      to={`/instructor/courses/${course._id}/quizzes`}
+                      className="rounded-lg bg-purple-600 px-4 py-2 text-sm font-semibold text-white hover:bg-purple-700"
+                    >
+                      Manage Quizzes
+                    </Link>
+
                     {course.status === 'draft' && (
                       <button
                         onClick={() => submitForApproval(course._id)}
@@ -176,7 +182,6 @@ export default function InstructorCourses() {
             </div>
           </div>
         )}
-
       </div>
     </main>
   );

@@ -1,8 +1,10 @@
-
 import Course from '../models/Course.js';
 import Section from '../models/Section.js';
 import Lesson from '../models/Lesson.js';
 import Enrollment from '../models/Enrollment.js';
+import Quiz from '../models/Quiz.js';
+import QuizAttempt from '../models/QuizAttempt.js';
+import LessonProgress from '../models/LessonProgress.js';
 
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { ApiError } from '../utils/ApiError.js';
@@ -56,7 +58,8 @@ export const getCourses = asyncHandler(async (req, res) => {
 });
 
 // GET /api/courses/:id
-// Public course details - published courses only
+// Public course details - published courses only.
+// Enrolled students also receive quiz metadata and their own progress.
 export const getCourseById = asyncHandler(async (req, res) => {
   const course = await Course.findOne({
     _id: req.params.id,
@@ -67,15 +70,14 @@ export const getCourseById = asyncHandler(async (req, res) => {
     throw new ApiError(404, 'Course not found');
   }
 
-  // Check whether the authenticated user is enrolled.
-  const isEnrolled = req.user
-    ? Boolean(
-        await Enrollment.exists({
-          user: req.user._id,
-          course: course._id,
-        })
-      )
-    : false;
+  const enrollment = req.user
+    ? await Enrollment.findOne({
+        user: req.user._id,
+        course: course._id,
+      }).select('lessonProgress quizProgress')
+    : null;
+
+  const isEnrolled = Boolean(enrollment);
 
   const sections = await Section.find({
     course: course._id,
@@ -90,25 +92,112 @@ export const getCourseById = asyncHandler(async (req, res) => {
     .sort({ order: 1 })
     .lean();
 
+  // Quiz metadata is provided only to enrolled students.
+  // Correct answers and explanations are never selected here.
+  let quizzes = [];
+  let completedLessonIds = [];
+  let lessonProgress = 0;
+  let quizProgress = 0;
+
+  if (req.user?.role === 'student' && isEnrolled) {
+    quizzes = await Quiz.find({ course: course._id })
+      .select('title section passPercent maxAttempts')
+      .sort({ createdAt: 1 })
+      .lean();
+
+    const quizIds = quizzes.map((quiz) => quiz._id);
+
+    const [completedLessons, attempts] = await Promise.all([
+      LessonProgress.find({
+        user: req.user._id,
+        course: course._id,
+        completed: true,
+      })
+        .select('lesson -_id')
+        .lean(),
+
+      quizIds.length
+        ? QuizAttempt.find({
+            user: req.user._id,
+            quiz: { $in: quizIds },
+          })
+            .select('quiz passed')
+            .lean()
+        : Promise.resolve([]),
+    ]);
+
+    completedLessonIds = completedLessons.map(
+      (item) => String(item.lesson)
+    );
+
+    const attemptsByQuiz = new Map();
+
+    for (const attempt of attempts) {
+      const quizId = String(attempt.quiz);
+
+      const current = attemptsByQuiz.get(quizId) || {
+        attemptsUsed: 0,
+        passed: false,
+      };
+
+      current.attemptsUsed += 1;
+      current.passed = current.passed || attempt.passed;
+
+      attemptsByQuiz.set(quizId, current);
+    }
+
+    quizzes = quizzes.map((quiz) => {
+      const attemptInfo = attemptsByQuiz.get(String(quiz._id)) || {
+        attemptsUsed: 0,
+        passed: false,
+      };
+
+      return {
+        ...quiz,
+        attemptsUsed: attemptInfo.attemptsUsed,
+        attemptsLeft: Math.max(
+          0,
+          quiz.maxAttempts - attemptInfo.attemptsUsed
+        ),
+        passed: attemptInfo.passed,
+      };
+    });
+
+    lessonProgress = enrollment.lessonProgress;
+    quizProgress = enrollment.quizProgress;
+  }
+
+  const sectionsWithContent = sections.map((section) => ({
+    _id: section._id,
+    title: section.title,
+    order: section.order,
+
+    lessons: lessons
+      .filter(
+        (lesson) => String(lesson.section) === String(section._id)
+      )
+      .map((lesson) => ({
+        _id: lesson._id,
+        title: lesson.title,
+        duration: lesson.duration,
+        isPreview: lesson.isPreview,
+        order: lesson.order,
+        completed: completedLessonIds.includes(String(lesson._id)),
+      })),
+
+    quizzes: quizzes.filter(
+      (quiz) => String(quiz.section) === String(section._id)
+    ),
+  }));
+
   res.json({
     course,
     isEnrolled,
-    sections: sections.map((section) => ({
-      _id: section._id,
-      title: section.title,
-      order: section.order,
-      lessons: lessons
-        .filter(
-          (lesson) => String(lesson.section) === String(section._id)
-        )
-        .map((lesson) => ({
-          _id: lesson._id,
-          title: lesson.title,
-          duration: lesson.duration,
-          isPreview: lesson.isPreview,
-          order: lesson.order,
-        })),
-    })),
+    lessonProgress,
+    quizProgress,
+    completedLessonIds,
+    sections: sectionsWithContent,
+    courseQuizzes: quizzes.filter((quiz) => !quiz.section),
   });
 });
 
@@ -146,6 +235,7 @@ export const getInstructorCourseCurriculum = asyncHandler(
         _id: section._id,
         title: section.title,
         order: section.order,
+
         lessons: lessons
           .filter(
             (lesson) =>

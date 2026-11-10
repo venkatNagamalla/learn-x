@@ -11,6 +11,7 @@ import adminRoutes from './routes/adminRoutes.js';
 import lessonRoutes from './routes/lessonRoutes.js';
 import studentLessonRoutes from './routes/studentLessonRoutes.js';
 import progressRoutes from './routes/progressRoutes.js';
+import quizRoutes from './routes/quizRoutes.js';
 
 const app = express();
 
@@ -23,8 +24,8 @@ app.use(cors({
 
 app.use(morgan('dev'));
 
-// Phase 4: Razorpay webhook route goes here,
-// before express.json()
+// Phase 4: Payment callback route will be configured here
+// before express.json(), according to the selected PayU integration.
 
 app.use(express.json());
 app.use(cookieParser());
@@ -51,6 +52,9 @@ app.use('/api/lessons', lessonRoutes);
 
 // Lesson progress routes
 app.use('/api/progress', progressRoutes);
+
+// Quiz routes
+app.use('/api', quizRoutes);
 
 // Global error handler
 app.use((err, req, res, next) => {

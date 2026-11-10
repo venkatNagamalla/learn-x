@@ -16,6 +16,7 @@ import StudentLearning from './pages/StudentLearning.jsx';
 import InstructorCourses from './pages/InstructorCourses.jsx';
 import InstructorCourseForm from './pages/InstructorCourseForm.jsx';
 import CurriculumEditor from './pages/CurriculumEditor.jsx';
+import QuizBuilder from './pages/QuizBuilder.jsx';
 import AdminDashboard from './pages/AdminDashboard.jsx';
 
 function Home() {
@@ -76,6 +77,11 @@ export default function App() {
         {/* Student Routes */}
         <Route element={<ProtectedRoute roles={['student']} />}>
           <Route
+            path="/learn/:courseId"
+            element={<StudentLearning />}
+          />
+
+          <Route
             path="/student/courses/:courseId/learn"
             element={<StudentLearning />}
           />
@@ -106,6 +112,11 @@ export default function App() {
           <Route
             path="/instructor/courses/:id/curriculum"
             element={<CurriculumEditor />}
+          />
+
+          <Route
+            path="/instructor/courses/:id/quizzes"
+            element={<QuizBuilder />}
           />
         </Route>
 

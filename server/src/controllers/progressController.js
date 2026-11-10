@@ -8,6 +8,7 @@ import LessonProgress from '../models/LessonProgress.js';
 
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { ApiError } from '../utils/ApiError.js';
+import { recalcProgress } from '../services/progressService.js';
 
 const getAccessibleLesson = async (lessonId, user) => {
   if (!mongoose.isValidObjectId(lessonId)) {
@@ -101,12 +102,16 @@ export const updateLessonProgress = asyncHandler(
         },
       },
       {
-        new: true,
+        returnDocument: 'after',
         upsert: true,
         runValidators: true,
         setDefaultsOnInsert: true,
       }
     );
+
+    if (req.user.role === 'student') {
+      await recalcProgress(req.user._id, course._id);
+    }
 
     res.json({
       message: 'Lesson progress saved successfully',

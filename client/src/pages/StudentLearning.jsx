@@ -4,14 +4,23 @@ import { Link, useParams } from 'react-router-dom';
 
 import api from '../api/axios';
 import VideoPlayer from '../components/VideoPlayer.jsx';
+import QuizTaker from '../components/QuizTaker.jsx';
 
 export default function StudentLearning() {
   const { courseId } = useParams();
 
   const [course, setCourse] = useState(null);
   const [sections, setSections] = useState([]);
+  const [courseQuizzes, setCourseQuizzes] = useState([]);
   const [isEnrolled, setIsEnrolled] = useState(false);
+
+  const [lessonProgress, setLessonProgress] = useState(0);
+  const [quizProgress, setQuizProgress] = useState(0);
+  const [completedLessonIds, setCompletedLessonIds] = useState([]);
+
   const [selectedLesson, setSelectedLesson] = useState(null);
+  const [selectedQuiz, setSelectedQuiz] = useState(null);
+
   const [playbackUrl, setPlaybackUrl] = useState('');
   const [resumeAt, setResumeAt] = useState(0);
 
@@ -24,47 +33,42 @@ export default function StudentLearning() {
     duration: 0,
   });
 
-  // Fetch course details, curriculum, and enrollment status.
-  useEffect(() => {
-    let cancelled = false;
+  // Fetch course details, curriculum, quizzes, and progress.
+  const loadCourse = useCallback(async () => {
+    try {
+      setCourseLoading(true);
+      setError('');
 
-    const loadCourse = async () => {
-      try {
-        setCourseLoading(true);
-        setError('');
+      const { data } = await api.get(`/courses/${courseId}`);
 
-        const { data } = await api.get(`/courses/${courseId}`);
+      setCourse(data.course);
+      setSections(data.sections || []);
+      setCourseQuizzes(data.courseQuizzes || []);
+      setIsEnrolled(Boolean(data.isEnrolled));
 
-        if (cancelled) return;
-
-        setCourse(data.course);
-        setSections(data.sections);
-        setIsEnrolled(Boolean(data.isEnrolled));
-      } catch (err) {
-        if (!cancelled) {
-          setError(
-            err.response?.data?.message ||
-              'Unable to load this course.'
-          );
-        }
-      } finally {
-        if (!cancelled) {
-          setCourseLoading(false);
-        }
-      }
-    };
-
-    loadCourse();
-
-    return () => {
-      cancelled = true;
-    };
+      setLessonProgress(data.lessonProgress || 0);
+      setQuizProgress(data.quizProgress || 0);
+      setCompletedLessonIds(data.completedLessonIds || []);
+    } catch (err) {
+      setError(
+        err.response?.data?.message ||
+          'Unable to load this course.'
+      );
+    } finally {
+      setCourseLoading(false);
+    }
   }, [courseId]);
+
+  useEffect(() => {
+    loadCourse();
+  }, [loadCourse]);
 
   // Request playback access and retrieve saved progress.
   const handleSelectLesson = async (lesson) => {
     try {
       setSelectedLesson(lesson);
+      setSelectedQuiz(null);
+
       setPlaybackUrl('');
       setResumeAt(0);
       setError('');
@@ -117,13 +121,27 @@ export default function StudentLearning() {
       }
 
       try {
-        await api.put(
+        const { data } = await api.put(
           `/progress/lessons/${selectedLesson._id}`,
           {
             watchedSeconds: progress.currentTime,
             duration: progress.duration,
           }
         );
+
+        if (data.progress?.completed) {
+          setCompletedLessonIds((previous) =>
+            previous.includes(selectedLesson._id)
+              ? previous
+              : [...previous, selectedLesson._id]
+          );
+        }
+
+        if (data.progress?.completed) {
+          setLessonProgress((previous) =>
+            Math.max(previous, 0)
+          );
+        }
       } catch (err) {
         console.error(
           'Unable to save lesson progress:',
@@ -134,6 +152,34 @@ export default function StudentLearning() {
     [selectedLesson]
   );
 
+  // Select a quiz to display its questions.
+  const handleSelectQuiz = (quiz) => {
+    setSelectedQuiz(quiz);
+    setSelectedLesson(null);
+
+    setPlaybackUrl('');
+    setResumeAt(0);
+    setError('');
+
+    setPlaybackProgress({
+      currentTime: 0,
+      duration: 0,
+    });
+  };
+
+  // Return from the quiz to the curriculum.
+  const handleBackFromQuiz = () => {
+    setSelectedQuiz(null);
+    setSelectedLesson(null);
+    setPlaybackUrl('');
+    setError('');
+  };
+
+  // Refresh course progress after a quiz is passed.
+  const handleQuizPassed = async () => {
+    await loadCourse();
+  };
+
   const formatTime = (seconds) => {
     if (!Number.isFinite(seconds)) return '0:00';
 
@@ -141,6 +187,70 @@ export default function StudentLearning() {
     const remainingSeconds = Math.floor(seconds % 60);
 
     return `${minutes}:${String(remainingSeconds).padStart(2, '0')}`;
+  };
+
+  const renderProgressBar = (label, value) => (
+    <div>
+      <div className="mb-2 flex justify-between text-sm">
+        <span className="font-medium text-slate-700">
+          {label}
+        </span>
+
+        <span className="font-semibold text-slate-900">
+          {value}%
+        </span>
+      </div>
+
+      <div className="h-2.5 overflow-hidden rounded-full bg-slate-200">
+        <div
+          className="h-full rounded-full bg-indigo-600 transition-all duration-300"
+          style={{
+            width: `${Math.min(100, Math.max(0, value))}%`,
+          }}
+        />
+      </div>
+    </div>
+  );
+
+  const renderQuizButton = (quiz) => {
+    const isSelected = selectedQuiz?._id === quiz._id;
+
+    return (
+      <button
+        key={quiz._id}
+        type="button"
+        onClick={() => handleSelectQuiz(quiz)}
+        className={`w-full rounded-lg border p-3 text-left transition ${
+          isSelected
+            ? 'border-indigo-500 bg-indigo-50'
+            : 'border-slate-200 hover:bg-slate-50'
+        }`}
+      >
+        <div className="flex items-start justify-between gap-2">
+          <span className="text-sm font-medium text-slate-800">
+            {quiz.title}
+          </span>
+
+          {quiz.passed ? (
+            <span className="shrink-0 text-xs font-semibold text-green-600">
+              Passed ✓
+            </span>
+          ) : (
+            <span className="shrink-0 text-xs text-slate-500">
+              Quiz
+            </span>
+          )}
+        </div>
+
+        <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs text-slate-500">
+          <span>Pass: {quiz.passPercent}%</span>
+          <span>
+            Attempts: {quiz.attemptsUsed}/{quiz.maxAttempts}
+          </span>
+          <span>Left: {quiz.attemptsLeft}</span>
+        </div>
+      </button>
+    );
   };
 
   if (courseLoading) {
@@ -178,20 +288,29 @@ export default function StudentLearning() {
           ← Back to course details
         </Link>
 
+        {/* Course heading */}
         <div className="mt-5">
           <h1 className="text-2xl font-bold text-slate-900">
             {course.title}
           </h1>
 
           <p className="mt-2 text-sm text-slate-600">
-            Select a lesson from the curriculum to start learning.
+            Continue your learning journey.
           </p>
         </div>
 
+        {/* Separate progress bars */}
+        <div className="mt-6 grid gap-5 rounded-xl border border-slate-200 bg-white p-5 shadow-sm sm:grid-cols-2">
+          {renderProgressBar('Lesson Progress', lessonProgress)}
+          {renderProgressBar('Quiz Progress', quizProgress)}
+        </div>
+
         <div className="mt-8 grid gap-8 lg:grid-cols-3">
-          {/* Video player */}
+          {/* Main content area */}
           <div className="lg:col-span-2">
             <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+
+              {/* Selected lesson */}
               {selectedLesson ? (
                 <>
                   <h2 className="mb-4 text-lg font-semibold text-slate-900">
@@ -223,13 +342,21 @@ export default function StudentLearning() {
                     </div>
                   )}
                 </>
+              ) : selectedQuiz ? (
+                /* Actual QuizTaker component */
+                <QuizTaker
+                  key={selectedQuiz._id}
+                  quizId={selectedQuiz._id}
+                  onBack={handleBackFromQuiz}
+                  onPassed={handleQuizPassed}
+                />
               ) : (
                 <div className="flex aspect-video items-center justify-center rounded-xl bg-slate-900 p-6 text-center text-white">
-                  Select a lesson to start watching.
+                  Select a lesson or quiz from the curriculum to start.
                 </div>
               )}
 
-              {error && selectedLesson && playbackUrl && (
+              {error && (
                 <p className="mt-3 text-sm text-red-600">
                   {error}
                 </p>
@@ -247,13 +374,14 @@ export default function StudentLearning() {
               {sections.length} sections
             </p>
 
-            <div className="mt-5 space-y-5">
+            <div className="mt-5 space-y-6">
               {sections.map((section, index) => (
                 <div key={section._id}>
                   <h3 className="mb-3 font-semibold text-slate-800">
                     {index + 1}. {section.title}
                   </h3>
 
+                  {/* Lessons */}
                   <div className="space-y-2">
                     {section.lessons.map((lesson) => {
                       const isLocked =
@@ -263,6 +391,10 @@ export default function StudentLearning() {
 
                       const isSelected =
                         selectedLesson?._id === lesson._id;
+
+                      const isCompleted =
+                        completedLessonIds.includes(lesson._id) ||
+                        lesson.completed;
 
                       return (
                         <button
@@ -295,6 +427,10 @@ export default function StudentLearning() {
                               <span className="text-slate-500">
                                 Locked
                               </span>
+                            ) : isCompleted ? (
+                              <span className="text-green-600">
+                                ✓ Completed
+                              </span>
                             ) : lesson.isPreview ? (
                               <span className="text-green-600">
                                 Preview
@@ -309,12 +445,38 @@ export default function StudentLearning() {
                       );
                     })}
                   </div>
+
+                  {/* Section quizzes */}
+                  {section.quizzes?.length > 0 && (
+                    <div className="mt-4">
+                      <h4 className="mb-2 text-sm font-semibold text-slate-700">
+                        Section Quizzes
+                      </h4>
+
+                      <div className="space-y-2">
+                        {section.quizzes.map(renderQuizButton)}
+                      </div>
+                    </div>
+                  )}
                 </div>
               ))}
 
-              {sections.length === 0 && (
+              {/* Course-level quizzes */}
+              {courseQuizzes.length > 0 && (
+                <div className="border-t border-slate-200 pt-4">
+                  <h3 className="mb-3 font-semibold text-slate-800">
+                    Course Quizzes
+                  </h3>
+
+                  <div className="space-y-2">
+                    {courseQuizzes.map(renderQuizButton)}
+                  </div>
+                </div>
+              )}
+
+              {sections.length === 0 && courseQuizzes.length === 0 && (
                 <p className="text-sm text-slate-500">
-                  No lessons have been added to this course yet.
+                  No lessons or quizzes have been added to this course yet.
                 </p>
               )}
             </div>
