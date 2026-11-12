@@ -1,1 +1,34 @@
+
 @import "tailwindcss";
+
+/* LiveKit control toolbar */
+.lk-control-bar {
+  background-color: #111827 !important;
+  color: #ffffff !important;
+}
+
+/* Microphone, camera, chat, screen share and leave buttons */
+.lk-control-bar button,
+.lk-control-bar .lk-button {
+  color: #ffffff !important;
+}
+
+/* Button icons */
+.lk-control-bar button svg,
+.lk-control-bar .lk-button svg {
+  color: #ffffff !important;
+  stroke: currentColor !important;
+}
+
+/* Button labels and text */
+.lk-control-bar button span,
+.lk-control-bar .lk-button span {
+  color: #ffffff !important;
+}
+
+/* Hover effect */
+.lk-control-bar button:hover,
+.lk-control-bar .lk-button:hover {
+  background-color: #374151 !important;
+  color: #ffffff !important;
+}

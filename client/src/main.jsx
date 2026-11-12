@@ -1,3 +1,4 @@
+
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { Provider } from 'react-redux';
@@ -8,7 +9,9 @@ import App from './App.jsx';
 import store from './app/store.js';
 import { injectStore } from './api/axios.js';
 
+// Load Tailwind first, then LiveKit component styles
 import './index.css';
+import '@livekit/components-styles';
 
 // Inject Redux store into Axios
 injectStore(store);

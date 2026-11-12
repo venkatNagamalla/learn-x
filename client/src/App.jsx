@@ -13,11 +13,17 @@ import Register from './pages/Register.jsx';
 import Courses from './pages/Courses.jsx';
 import CourseDetail from './pages/CourseDetail.jsx';
 import StudentLearning from './pages/StudentLearning.jsx';
+import StudentDashboard from './pages/StudentDashboard.jsx';
+
 import InstructorCourses from './pages/InstructorCourses.jsx';
 import InstructorCourseForm from './pages/InstructorCourseForm.jsx';
 import CurriculumEditor from './pages/CurriculumEditor.jsx';
 import QuizBuilder from './pages/QuizBuilder.jsx';
 import AdminDashboard from './pages/AdminDashboard.jsx';
+
+import InstructorLiveClasses from './pages/InstructorLiveClasses.jsx';
+import StudentLiveClasses from './pages/StudentLiveClasses.jsx';
+import LiveClassRoom from './pages/LiveClassRoom.jsx';
 
 function Home() {
   return (
@@ -40,14 +46,6 @@ function Home() {
         </Link>
       </div>
     </div>
-  );
-}
-
-function StudentDashboard() {
-  return (
-    <h1 className="p-8 text-2xl font-bold">
-      Student Dashboard
-    </h1>
   );
 }
 
@@ -82,13 +80,23 @@ export default function App() {
           />
 
           <Route
+            path="/student"
+            element={<StudentDashboard />}
+          />
+
+          <Route
             path="/student/courses/:courseId/learn"
             element={<StudentLearning />}
           />
 
           <Route
-            path="/student/*"
-            element={<StudentDashboard />}
+            path="/student/live-classes"
+            element={<StudentLiveClasses />}
+          />
+
+          <Route
+            path="/student/live-classes/:id"
+            element={<LiveClassRoom />}
           />
         </Route>
 
@@ -97,6 +105,16 @@ export default function App() {
           <Route
             path="/instructor"
             element={<InstructorCourses />}
+          />
+
+          <Route
+            path="/instructor/live-classes"
+            element={<InstructorLiveClasses />}
+          />
+
+          <Route
+            path="/instructor/live-classes/:id"
+            element={<LiveClassRoom />}
           />
 
           <Route

@@ -350,6 +350,40 @@ export const getMyCourses = asyncHandler(async (req, res) => {
   });
 });
 
+
+// GET /api/courses/enrolled
+export const getEnrolledCourses = asyncHandler(async (req, res) => {
+  const enrollments = await Enrollment.find({
+    user: req.user._id,
+  })
+    .populate({
+      path: 'course',
+      select: 'title description thumbnail category level price instructor status',
+      populate: {
+        path: 'instructor',
+        select: 'name',
+      },
+    })
+    .sort({ enrolledAt: -1 });
+
+  const items = enrollments
+    .filter((enrollment) => enrollment.course)
+    .map((enrollment) => ({
+      enrollmentId: enrollment._id,
+      enrolledAt: enrollment.enrolledAt,
+      lessonProgress: enrollment.lessonProgress,
+      quizProgress: enrollment.quizProgress,
+      completedAt: enrollment.completedAt,
+      course: enrollment.course,
+    }));
+
+  res.json({
+    items,
+    total: items.length,
+  });
+});
+
+
 // PATCH /api/courses/:id/submit
 export const submitCourse = asyncHandler(async (req, res) => {
   const course = await Course.findById(req.params.id);

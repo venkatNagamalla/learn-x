@@ -1,6 +1,8 @@
+
 import { Link, useNavigate } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
 import toast from 'react-hot-toast';
+
 import { logout } from '../features/authSlice.js';
 import api from '../api/axios.js';
 
@@ -22,22 +24,28 @@ export default function Navbar() {
   };
 
   return (
-    <nav className="flex items-center justify-between bg-slate-900 px-6 py-4 text-white">
+    <nav className="flex flex-wrap items-center justify-between gap-4 bg-slate-900 px-6 py-4 text-white">
       <Link to="/" className="text-xl font-bold">
         LMS Platform
       </Link>
 
-      <div className="flex items-center gap-5">
+      <div className="flex flex-wrap items-center gap-5">
         {user ? (
           <>
             <Link to="/">Home</Link>
 
             {user.role === 'student' && (
-              <Link to="/student">My Learning</Link>
+              <>
+                <Link to="/student">My Learning</Link>
+                <Link to="/student/live-classes">Live Classes</Link>
+              </>
             )}
 
             {user.role === 'instructor' && (
-              <Link to="/instructor">Instructor Dashboard</Link>
+              <>
+                <Link to="/instructor">Instructor Dashboard</Link>
+                <Link to="/instructor/live-classes">Live Classes</Link>
+              </>
             )}
 
             {user.role === 'admin' && (
@@ -58,6 +66,7 @@ export default function Navbar() {
         ) : (
           <>
             <Link to="/login">Login</Link>
+
             <Link
               to="/register"
               className="rounded-lg bg-indigo-600 px-4 py-2 hover:bg-indigo-700"

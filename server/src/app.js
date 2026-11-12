@@ -12,6 +12,7 @@ import lessonRoutes from './routes/lessonRoutes.js';
 import studentLessonRoutes from './routes/studentLessonRoutes.js';
 import progressRoutes from './routes/progressRoutes.js';
 import quizRoutes from './routes/quizRoutes.js';
+import liveClassRoutes from './routes/liveClassRoutes.js';
 
 const app = express();
 
@@ -55,6 +56,9 @@ app.use('/api/progress', progressRoutes);
 
 // Quiz routes
 app.use('/api', quizRoutes);
+
+// Live class routes
+app.use('/api/live', liveClassRoutes);
 
 // Global error handler
 app.use((err, req, res, next) => {

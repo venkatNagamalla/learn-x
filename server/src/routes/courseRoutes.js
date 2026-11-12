@@ -9,6 +9,7 @@ import {
   updateCourse,
   deleteCourse,
   getMyCourses,
+  getEnrolledCourses,
   submitCourse,
   createSection,
   updateSection,
@@ -29,6 +30,15 @@ const router = express.Router();
 // Public routes
 router.get('/', getCourses);
 router.get('/mine', protect, requireRole('instructor'), getMyCourses);
+
+// Student enrolled courses
+// Keep this before /:id so "enrolled" is not treated as a course ID.
+router.get(
+  '/enrolled',
+  protect,
+  requireRole('student'),
+  getEnrolledCourses
+);
 
 // Public course details with optional authentication.
 // Authenticated students receive their enrollment status.
