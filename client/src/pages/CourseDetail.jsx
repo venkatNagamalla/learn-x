@@ -1,11 +1,14 @@
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
+
 import {
   clearSelectedCourse,
   fetchCourseById,
 } from '../features/coursesSlice.js';
+
+import { createPaymentOrder } from '../api/paymentApi.js';
 
 const formatPrice = (price) => {
   if (price === 0) return 'Free';
@@ -32,6 +35,7 @@ const formatDuration = (seconds) => {
 export default function CourseDetail() {
   const { id } = useParams();
   const dispatch = useDispatch();
+  const navigate = useNavigate();
 
   const {
     selectedCourse,
@@ -41,6 +45,10 @@ export default function CourseDetail() {
   } = useSelector((state) => state.courses);
 
   const user = useSelector((state) => state.auth.user);
+
+  const [phone, setPhone] = useState('');
+  const [paymentLoading, setPaymentLoading] = useState(false);
+  const [paymentError, setPaymentError] = useState('');
 
   const isStudent = user?.role === 'student';
   const isLoggedIn = Boolean(user);
@@ -53,6 +61,65 @@ export default function CourseDetail() {
       dispatch(clearSelectedCourse());
     };
   }, [dispatch, id]);
+
+  const handleCoursePurchase = async () => {
+    setPaymentError('');
+
+    if (!isFreeCourse && !/^\d{10,15}$/.test(phone.trim())) {
+      setPaymentError(
+        'Please enter a valid phone number containing 10 to 15 digits.'
+      );
+      return;
+    }
+
+    try {
+      setPaymentLoading(true);
+
+      const response = await createPaymentOrder(
+        selectedCourse._id,
+        isFreeCourse ? undefined : phone.trim()
+      );
+
+      if (response.free) {
+        navigate(`/student/courses/${selectedCourse._id}/learn`);
+        return;
+      }
+
+      if (!response.checkoutUrl || !response.checkoutFields) {
+        throw new Error('Invalid payment checkout response.');
+      }
+
+      const form = document.createElement('form');
+
+      form.method = 'POST';
+      form.action = response.checkoutUrl;
+      form.acceptCharset = 'UTF-8';
+      form.style.display = 'none';
+
+      Object.entries(response.checkoutFields).forEach(
+        ([name, value]) => {
+          const input = document.createElement('input');
+
+          input.type = 'hidden';
+          input.name = name;
+          input.value = String(value ?? '');
+
+          form.appendChild(input);
+        }
+      );
+
+      document.body.appendChild(form);
+      form.submit();
+    } catch (err) {
+      setPaymentError(
+        err.response?.data?.message ||
+          err.message ||
+          'Unable to process your request. Please try again.'
+      );
+
+      setPaymentLoading(false);
+    }
+  };
 
   if (detailStatus === 'loading' || detailStatus === 'idle') {
     return (
@@ -68,9 +135,11 @@ export default function CourseDetail() {
         <h2 className="text-2xl font-bold text-slate-800">
           Unable to load course
         </h2>
+
         <p className="mt-3 text-red-600">
           {error || 'Course not found.'}
         </p>
+
         <Link
           to="/courses"
           className="mt-6 inline-block text-indigo-600 hover:underline"
@@ -93,7 +162,6 @@ export default function CourseDetail() {
           ← Back to courses
         </Link>
 
-        {/* Course overview */}
         <div className="grid gap-8 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm lg:grid-cols-5 lg:p-8">
           <div className="lg:col-span-3">
             <div className="mb-4 flex flex-wrap gap-2">
@@ -131,7 +199,6 @@ export default function CourseDetail() {
             </div>
           </div>
 
-          {/* Course action card */}
           <div className="lg:col-span-2">
             <img
               src={
@@ -148,14 +215,63 @@ export default function CourseDetail() {
               </p>
 
               {isStudent && (
-                <Link
-                  to={`/student/courses/${selectedCourse._id}/learn`}
-                  className="mt-5 block w-full rounded-lg bg-indigo-600 px-6 py-3 text-center font-semibold text-white transition hover:bg-indigo-700"
-                >
-                  {isFreeCourse
-                    ? 'Start Learning'
-                    : 'Watch Preview Lessons'}
-                </Link>
+                <>
+                  {isFreeCourse ? (
+                    <button
+                      type="button"
+                      onClick={handleCoursePurchase}
+                      disabled={paymentLoading}
+                      className="mt-5 w-full rounded-lg bg-indigo-600 px-6 py-3 text-center font-semibold text-white transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      {paymentLoading
+                        ? 'Enrolling...'
+                        : 'Enroll & Start Learning'}
+                    </button>
+                  ) : (
+                    <>
+                      <Link
+                        to={`/student/courses/${selectedCourse._id}/learn`}
+                        className="mt-5 block w-full rounded-lg bg-slate-100 px-6 py-3 text-center font-semibold text-indigo-700 transition hover:bg-slate-200"
+                      >
+                        Watch Preview Lessons
+                      </Link>
+
+                      <div className="mt-5">
+                        <label
+                          htmlFor="payment-phone"
+                          className="mb-2 block text-sm font-medium text-slate-700"
+                        >
+                          Phone Number
+                        </label>
+
+                        <input
+                          id="payment-phone"
+                          type="tel"
+                          inputMode="numeric"
+                          autoComplete="tel"
+                          value={phone}
+                          onChange={(event) =>
+                            setPhone(event.target.value)
+                          }
+                          placeholder="Enter your phone number"
+                          maxLength={15}
+                          className="w-full rounded-lg border border-slate-300 px-4 py-3 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
+                        />
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={handleCoursePurchase}
+                        disabled={paymentLoading}
+                        className="mt-3 w-full rounded-lg bg-indigo-600 px-6 py-3 font-semibold text-white transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        {paymentLoading
+                          ? 'Redirecting to PayU...'
+                          : `Buy Course - ${formatPrice(selectedCourse.price)}`}
+                      </button>
+                    </>
+                  )}
+                </>
               )}
 
               {!isLoggedIn && (
@@ -163,33 +279,29 @@ export default function CourseDetail() {
                   to="/login"
                   className="mt-5 block w-full rounded-lg bg-indigo-600 px-6 py-3 text-center font-semibold text-white transition hover:bg-indigo-700"
                 >
-                  Log in to watch lessons
+                  Log in to access this course
                 </Link>
               )}
 
               {isLoggedIn && !isStudent && (
                 <p className="mt-5 rounded-lg bg-slate-100 px-4 py-3 text-center text-sm text-slate-600">
-                  Student access is required to watch lessons.
+                  Student access is required to enroll in courses.
                 </p>
               )}
 
-              <button
-                type="button"
-                disabled
-                className="mt-3 w-full cursor-not-allowed rounded-lg bg-slate-200 px-6 py-3 font-semibold text-slate-500"
-                title="Payment integration will be added in Phase 4"
-              >
-                Buy Course
-              </button>
+              {paymentError && (
+                <p className="mt-4 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700">
+                  {paymentError}
+                </p>
+              )}
 
               <p className="mt-3 text-center text-xs text-slate-500">
-                Secure payment will be available in Phase 4.
+                Payments are securely processed through PayU Hosted Checkout.
               </p>
             </div>
           </div>
         </div>
 
-        {/* Curriculum */}
         <section className="mt-10">
           <h2 className="mb-6 text-2xl font-bold text-slate-900">
             Course Curriculum

@@ -14,6 +14,9 @@ import Courses from './pages/Courses.jsx';
 import CourseDetail from './pages/CourseDetail.jsx';
 import StudentLearning from './pages/StudentLearning.jsx';
 import StudentDashboard from './pages/StudentDashboard.jsx';
+import Certificates from './pages/Certificates.jsx';
+import CertificateVerification from './pages/CertificateVerification.jsx';
+import PaymentResult from './pages/PaymentResult.jsx';
 
 import InstructorCourses from './pages/InstructorCourses.jsx';
 import InstructorCourseForm from './pages/InstructorCourseForm.jsx';
@@ -68,6 +71,12 @@ export default function App() {
         <Route path="/courses" element={<Courses />} />
         <Route path="/courses/:id" element={<CourseDetail />} />
 
+        {/* Public Certificate Verification */}
+        <Route
+          path="/verify/:certificateId"
+          element={<CertificateVerification />}
+        />
+
         {/* Authentication */}
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
@@ -97,6 +106,16 @@ export default function App() {
           <Route
             path="/student/live-classes/:id"
             element={<LiveClassRoom />}
+          />
+
+          <Route
+            path="/certificates"
+            element={<Certificates />}
+          />
+
+          <Route
+            path="/payment/result"
+            element={<PaymentResult />}
           />
         </Route>
 

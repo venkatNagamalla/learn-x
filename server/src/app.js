@@ -13,6 +13,8 @@ import studentLessonRoutes from './routes/studentLessonRoutes.js';
 import progressRoutes from './routes/progressRoutes.js';
 import quizRoutes from './routes/quizRoutes.js';
 import liveClassRoutes from './routes/liveClassRoutes.js';
+import certificateRoutes from './routes/certificateRoutes.js';
+import paymentRoutes from './routes/paymentRoutes.js';
 
 const app = express();
 
@@ -25,10 +27,12 @@ app.use(cors({
 
 app.use(morgan('dev'));
 
-// Phase 4: Payment callback route will be configured here
-// before express.json(), according to the selected PayU integration.
+// PayU Hosted Checkout form callback parsing.
+app.use(express.urlencoded({ extended: false }));
 
+// Normal JSON API request parsing.
 app.use(express.json());
+
 app.use(cookieParser());
 
 // Health check API
@@ -45,6 +49,9 @@ app.use('/api/courses', courseRoutes);
 // Admin routes
 app.use('/api/admin', adminRoutes);
 
+// Payment routes
+app.use('/api/payments', paymentRoutes);
+
 // Student lesson playback routes
 app.use('/api/student/lessons', studentLessonRoutes);
 
@@ -59,6 +66,9 @@ app.use('/api', quizRoutes);
 
 // Live class routes
 app.use('/api/live', liveClassRoutes);
+
+// Certificate routes
+app.use('/api/certificates', certificateRoutes);
 
 // Global error handler
 app.use((err, req, res, next) => {

@@ -38,6 +38,7 @@ export default function Navbar() {
               <>
                 <Link to="/student">My Learning</Link>
                 <Link to="/student/live-classes">Live Classes</Link>
+                <Link to="/certificates">Certificates</Link>
               </>
             )}
 

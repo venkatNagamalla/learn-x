@@ -33,7 +33,6 @@ export default function StudentLearning() {
     duration: 0,
   });
 
-  // Fetch course details, curriculum, quizzes, and progress.
   const loadCourse = useCallback(async () => {
     try {
       setCourseLoading(true);
@@ -63,7 +62,6 @@ export default function StudentLearning() {
     loadCourse();
   }, [loadCourse]);
 
-  // Request playback access and retrieve saved progress.
   const handleSelectLesson = async (lesson) => {
     try {
       setSelectedLesson(lesson);
@@ -107,7 +105,6 @@ export default function StudentLearning() {
     }
   };
 
-  // Receive playback progress and save it to the backend.
   const handleProgress = useCallback(
     async (progress) => {
       setPlaybackProgress(progress);
@@ -152,7 +149,6 @@ export default function StudentLearning() {
     [selectedLesson]
   );
 
-  // Select a quiz to display its questions.
   const handleSelectQuiz = (quiz) => {
     setSelectedQuiz(quiz);
     setSelectedLesson(null);
@@ -167,7 +163,6 @@ export default function StudentLearning() {
     });
   };
 
-  // Return from the quiz to the curriculum.
   const handleBackFromQuiz = () => {
     setSelectedQuiz(null);
     setSelectedLesson(null);
@@ -175,7 +170,6 @@ export default function StudentLearning() {
     setError('');
   };
 
-  // Refresh course progress after a quiz is passed.
   const handleQuizPassed = async () => {
     await loadCourse();
   };
@@ -278,6 +272,9 @@ export default function StudentLearning() {
 
   if (!course) return null;
 
+  const isCourseCompleted =
+    lessonProgress >= 100 && quizProgress >= 100;
+
   return (
     <div className="min-h-screen bg-slate-50">
       <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
@@ -299,6 +296,31 @@ export default function StudentLearning() {
           </p>
         </div>
 
+        {/* Course completion banner */}
+        {isCourseCompleted && (
+          <div className="mt-6 rounded-xl border border-green-200 bg-green-50 p-5">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <h2 className="text-lg font-bold text-green-800">
+                  🎉 Course Completed!
+                </h2>
+
+                <p className="mt-1 text-sm text-green-700">
+                  Congratulations! You have completed all lessons
+                  and passed all required quizzes.
+                </p>
+              </div>
+
+              <Link
+                to="/certificates"
+                className="inline-flex shrink-0 items-center justify-center rounded-lg bg-green-700 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-green-800"
+              >
+                View Certificates
+              </Link>
+            </div>
+          </div>
+        )}
+
         {/* Separate progress bars */}
         <div className="mt-6 grid gap-5 rounded-xl border border-slate-200 bg-white p-5 shadow-sm sm:grid-cols-2">
           {renderProgressBar('Lesson Progress', lessonProgress)}
@@ -310,7 +332,6 @@ export default function StudentLearning() {
           <div className="lg:col-span-2">
             <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
 
-              {/* Selected lesson */}
               {selectedLesson ? (
                 <>
                   <h2 className="mb-4 text-lg font-semibold text-slate-900">
@@ -343,7 +364,6 @@ export default function StudentLearning() {
                   )}
                 </>
               ) : selectedQuiz ? (
-                /* Actual QuizTaker component */
                 <QuizTaker
                   key={selectedQuiz._id}
                   quizId={selectedQuiz._id}
@@ -381,7 +401,6 @@ export default function StudentLearning() {
                     {index + 1}. {section.title}
                   </h3>
 
-                  {/* Lessons */}
                   <div className="space-y-2">
                     {section.lessons.map((lesson) => {
                       const isLocked =
@@ -446,7 +465,6 @@ export default function StudentLearning() {
                     })}
                   </div>
 
-                  {/* Section quizzes */}
                   {section.quizzes?.length > 0 && (
                     <div className="mt-4">
                       <h4 className="mb-2 text-sm font-semibold text-slate-700">
@@ -461,7 +479,6 @@ export default function StudentLearning() {
                 </div>
               ))}
 
-              {/* Course-level quizzes */}
               {courseQuizzes.length > 0 && (
                 <div className="border-t border-slate-200 pt-4">
                   <h3 className="mb-3 font-semibold text-slate-800">
