@@ -10,6 +10,10 @@ import { s3 } from '../config/s3.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { ApiError } from '../utils/ApiError.js';
 
+import {
+  regenerateCertificatePdf,
+} from '../services/certificateService.js';
+
 // GET /api/certificates/mine
 export const getMyCertificates = asyncHandler(
   async (req, res) => {
@@ -26,7 +30,7 @@ export const getMyCertificates = asyncHandler(
 // GET /api/certificates/:id/download
 export const downloadCertificate = asyncHandler(
   async (req, res) => {
-    const certificate = await Certificate.findById(req.params.id);
+    let certificate = await Certificate.findById(req.params.id);
 
     if (!certificate) {
       throw new ApiError(404, 'Certificate not found');
@@ -49,12 +53,27 @@ export const downloadCertificate = asyncHandler(
       );
     }
 
+    // Regenerate old certificates once using the new PDF design.
+    try {
+      certificate = await regenerateCertificatePdf(
+        certificate.certificateId
+      );
+    } catch (error) {
+      console.error('Certificate PDF regeneration failed:', error);
+
+      throw new ApiError(
+        500,
+        'Unable to prepare the redesigned certificate. Please try again.'
+      );
+    }
+
     const command = new GetObjectCommand({
       Bucket: process.env.AWS_S3_RAW_BUCKET,
       Key: certificate.pdfKey,
       ResponseContentType: 'application/pdf',
       ResponseContentDisposition:
         'attachment; filename="certificate.pdf"',
+      ResponseCacheControl: 'no-cache, no-store, must-revalidate',
     });
 
     const downloadUrl = await getSignedUrl(s3, command, {

@@ -1,32 +1,230 @@
 
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Manrope:wght@400;500;600;700;800&display=swap');
+
 @import "tailwindcss";
 
-/* LiveKit control toolbar */
+/* ========================================
+   LMS DESIGN SYSTEM - GLOBAL THEME
+======================================== */
+
+@theme {
+  --font-sans: "Inter", sans-serif;
+  --font-heading: "Manrope", sans-serif;
+
+  --color-primary: #5B4BDB;
+  --color-primary-dark: #4938C8;
+
+  --color-slate-heading: #1E293B;
+  --color-slate-body: #475569;
+  --color-slate-muted: #64748B;
+
+  --color-page: #F8FAFC;
+  --color-card: #FFFFFF;
+  --color-border: #E2E8F0;
+}
+
+:root {
+  font-family: "Inter", sans-serif;
+  color: #475569;
+  background-color: #F8FAFC;
+
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+
+  --heading-color: #1E293B;
+  --body-color: #475569;
+  --muted-color: #64748B;
+
+  --primary-color: #5B4BDB;
+  --primary-hover: #4938C8;
+
+  --page-background: #F8FAFC;
+  --card-background: #FFFFFF;
+  --border-color: #E2E8F0;
+}
+
+/* ========================================
+   GLOBAL RESET AND TYPOGRAPHY
+======================================== */
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+  font-size: 16px;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+
+  font-family: "Inter", sans-serif;
+  font-size: 16px;
+  font-weight: 400;
+  line-height: 1.7;
+
+  color: var(--body-color);
+  background-color: var(--page-background);
+}
+
+/* All headings use Manrope */
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  font-family: "Manrope", sans-serif;
+  color: var(--heading-color);
+  font-weight: 700;
+  line-height: 1.25;
+  letter-spacing: -0.025em;
+}
+
+h1 {
+  font-size: 2.5rem;
+}
+
+h2 {
+  font-size: 2rem;
+}
+
+h3 {
+  font-size: 1.5rem;
+}
+
+h4 {
+  font-size: 1.25rem;
+}
+
+h5 {
+  font-size: 1.125rem;
+}
+
+h6 {
+  font-size: 1rem;
+}
+
+/* Body and interface text use Inter */
+
+p,
+span,
+label,
+input,
+textarea,
+select,
+button {
+  font-family: "Inter", sans-serif;
+}
+
+p {
+  color: var(--body-color);
+  font-size: 1rem;
+}
+
+small,
+.text-muted {
+  color: var(--muted-color);
+  font-size: 0.875rem;
+}
+
+/* ========================================
+   LINKS AND BUTTONS
+======================================== */
+
+a {
+  color: var(--primary-color);
+  text-decoration: none;
+}
+
+a:hover {
+  color: var(--primary-hover);
+}
+
+button {
+  cursor: pointer;
+  font-size: 1rem;
+}
+
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: 2px solid var(--primary-color);
+  outline-offset: 2px;
+}
+
+/* ========================================
+   FORM ELEMENTS
+======================================== */
+
+input,
+textarea,
+select {
+  color: var(--heading-color);
+  font-size: 1rem;
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: #94A3B8;
+}
+
+/* ========================================
+   SCROLLBAR
+======================================== */
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #CBD5E1 transparent;
+}
+
+*::-webkit-scrollbar {
+  width: 7px;
+  height: 7px;
+}
+
+*::-webkit-scrollbar-thumb {
+  background: #CBD5E1;
+  border-radius: 10px;
+}
+
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* ========================================
+   LIVEKIT CONTROL TOOLBAR
+======================================== */
+
 .lk-control-bar {
   background-color: #111827 !important;
   color: #ffffff !important;
 }
 
-/* Microphone, camera, chat, screen share and leave buttons */
 .lk-control-bar button,
 .lk-control-bar .lk-button {
   color: #ffffff !important;
 }
 
-/* Button icons */
 .lk-control-bar button svg,
 .lk-control-bar .lk-button svg {
   color: #ffffff !important;
   stroke: currentColor !important;
 }
 
-/* Button labels and text */
 .lk-control-bar button span,
 .lk-control-bar .lk-button span {
   color: #ffffff !important;
 }
 
-/* Hover effect */
 .lk-control-bar button:hover,
 .lk-control-bar .lk-button:hover {
   background-color: #374151 !important;

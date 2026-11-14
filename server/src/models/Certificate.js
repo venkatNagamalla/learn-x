@@ -20,6 +20,11 @@ const certificateSchema = new mongoose.Schema(
       trim: true,
     },
 
+    // Undefined for older certificates; 2 identifies the redesigned PDF.
+    pdfDesignVersion: {
+      type: Number,
+    },
+
     issuedAt: {
       type: Date,
       default: Date.now,
@@ -28,7 +33,6 @@ const certificateSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-// A student can receive only one certificate per course.
 certificateSchema.index(
   { user: 1, course: 1 },
   { unique: true }
