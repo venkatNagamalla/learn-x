@@ -44,8 +44,17 @@ export default function Navbar() {
 
             {user.role === 'instructor' && (
               <>
-                <Link to="/instructor">Instructor Dashboard</Link>
-                <Link to="/instructor/live-classes">Live Classes</Link>
+                <Link to="/instructor">
+                  Dashboard
+                </Link>
+
+                <Link to="/instructor/courses">
+                  My Courses
+                </Link>
+
+                <Link to="/instructor/live-classes">
+                  Live Classes
+                </Link>
               </>
             )}
 

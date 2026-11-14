@@ -18,6 +18,7 @@ import Certificates from './pages/Certificates.jsx';
 import CertificateVerification from './pages/CertificateVerification.jsx';
 import PaymentResult from './pages/PaymentResult.jsx';
 
+import InstructorDashboard from './pages/InstructorDashboard.jsx';
 import InstructorCourses from './pages/InstructorCourses.jsx';
 import InstructorCourseForm from './pages/InstructorCourseForm.jsx';
 import CurriculumEditor from './pages/CurriculumEditor.jsx';
@@ -123,6 +124,11 @@ export default function App() {
         <Route element={<ProtectedRoute roles={['instructor']} />}>
           <Route
             path="/instructor"
+            element={<InstructorDashboard />}
+          />
+
+          <Route
+            path="/instructor/courses"
             element={<InstructorCourses />}
           />
 

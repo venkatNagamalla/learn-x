@@ -2,18 +2,20 @@
 import mongoose from 'mongoose';
 
 import Earning from '../models/Earning.js';
+import Enrollment from '../models/Enrollment.js';
+import Course from '../models/Course.js';
 
 // GET /api/earnings/summary
 export const getEarningsSummary = async (req, res, next) => {
   try {
-    const instructorId = req.user._id;
+    const instructorId = new mongoose.Types.ObjectId(
+      req.user._id
+    );
 
     const [result] = await Earning.aggregate([
       {
         $match: {
-          instructor: new mongoose.Types.ObjectId(
-            instructorId
-          ),
+          instructor: instructorId,
         },
       },
       {
@@ -45,14 +47,31 @@ export const getEarningsSummary = async (req, res, next) => {
       },
     ]);
 
+    const courseIds = await Course.distinct('_id', {
+      instructor: instructorId,
+    });
+
+    const [students, totalCourses] = await Promise.all([
+      Enrollment.distinct('user', {
+        course: { $in: courseIds },
+      }),
+      Course.countDocuments({
+        instructor: instructorId,
+      }),
+    ]);
+
     res.json({
-      summary: result || {
-        totalGross: 0,
-        totalPlatformFee: 0,
-        totalNet: 0,
-        pendingPayout: 0,
-        paidPayout: 0,
-        totalTransactions: 0,
+      summary: {
+        ...(result || {
+          totalGross: 0,
+          totalPlatformFee: 0,
+          totalNet: 0,
+          pendingPayout: 0,
+          paidPayout: 0,
+          totalTransactions: 0,
+        }),
+        totalStudents: students.length,
+        totalCourses,
       },
     });
   } catch (error) {
@@ -63,14 +82,14 @@ export const getEarningsSummary = async (req, res, next) => {
 // GET /api/earnings/monthly
 export const getMonthlyEarnings = async (req, res, next) => {
   try {
-    const instructorId = req.user._id;
+    const instructorId = new mongoose.Types.ObjectId(
+      req.user._id
+    );
 
     const earnings = await Earning.aggregate([
       {
         $match: {
-          instructor: new mongoose.Types.ObjectId(
-            instructorId
-          ),
+          instructor: instructorId,
         },
       },
       {
@@ -99,6 +118,100 @@ export const getMonthlyEarnings = async (req, res, next) => {
   }
 };
 
+// GET /api/earnings/courses
+export const getInstructorCourseStats = async (
+  req,
+  res,
+  next
+) => {
+  try {
+    const instructorId = new mongoose.Types.ObjectId(
+      req.user._id
+    );
+
+    const courses = await Course.find({
+      instructor: instructorId,
+    })
+      .select('title thumbnail status ratingAvg ratingCount')
+      .sort({ createdAt: -1 })
+      .lean();
+
+    const courseIds = courses.map((course) => course._id);
+
+    const [earningStats, enrollmentStats] = await Promise.all([
+      Earning.aggregate([
+        {
+          $match: {
+            instructor: instructorId,
+            course: { $in: courseIds },
+          },
+        },
+        {
+          $group: {
+            _id: '$course',
+            grossRevenue: { $sum: '$gross' },
+            netRevenue: { $sum: '$net' },
+            sales: { $sum: 1 },
+          },
+        },
+      ]),
+
+      Enrollment.aggregate([
+        {
+          $match: {
+            course: { $in: courseIds },
+          },
+        },
+        {
+          $group: {
+            _id: '$course',
+            students: { $sum: 1 },
+          },
+        },
+      ]),
+    ]);
+
+    const earningsByCourse = new Map(
+      earningStats.map((item) => [
+        String(item._id),
+        item,
+      ])
+    );
+
+    const enrollmentsByCourse = new Map(
+      enrollmentStats.map((item) => [
+        String(item._id),
+        item.students,
+      ])
+    );
+
+    const items = courses.map((course) => {
+      const id = String(course._id);
+      const earning = earningsByCourse.get(id);
+
+      return {
+        _id: course._id,
+        title: course.title,
+        thumbnail: course.thumbnail,
+        status: course.status,
+        students: enrollmentsByCourse.get(id) || 0,
+        grossRevenue: earning?.grossRevenue || 0,
+        netRevenue: earning?.netRevenue || 0,
+        sales: earning?.sales || 0,
+        ratingAvg: course.ratingAvg || 0,
+        ratingCount: course.ratingCount || 0,
+      };
+    });
+
+    res.json({
+      items,
+      total: items.length,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 // GET /api/earnings/transactions
 export const getEarningsTransactions = async (
   req,
@@ -121,11 +234,26 @@ export const getEarningsTransactions = async (
       )
     );
 
+    const { payoutStatus } = req.query;
+
+    if (
+      payoutStatus &&
+      !['pending', 'paid'].includes(payoutStatus)
+    ) {
+      return res.status(400).json({
+        message: 'Invalid payout status.',
+      });
+    }
+
     const skip = (page - 1) * limit;
 
     const filter = {
       instructor: instructorId,
     };
+
+    if (payoutStatus) {
+      filter.payoutStatus = payoutStatus;
+    }
 
     const [items, total] = await Promise.all([
       Earning.find(filter)

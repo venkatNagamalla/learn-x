@@ -5,6 +5,7 @@ import {
   getEarningsSummary,
   getMonthlyEarnings,
   getEarningsTransactions,
+  getInstructorCourseStats,
 } from '../controllers/earningController.js';
 
 import {
@@ -24,7 +25,11 @@ router.get('/summary', getEarningsSummary);
 // GET /api/earnings/monthly
 router.get('/monthly', getMonthlyEarnings);
 
+// GET /api/earnings/courses
+router.get('/courses', getInstructorCourseStats);
+
 // GET /api/earnings/transactions
+// Optional filter: ?payoutStatus=pending or ?payoutStatus=paid
 router.get('/transactions', getEarningsTransactions);
 
 export default router;

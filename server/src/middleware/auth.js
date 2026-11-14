@@ -25,6 +25,12 @@ export const protect = async (req, res, next) => {
       });
     }
 
+    if (req.user.isBlocked) {
+      return res.status(403).json({
+        message: 'Your account has been blocked. Please contact the administrator.',
+      });
+    }
+
     next();
   } catch {
     res.status(401).json({

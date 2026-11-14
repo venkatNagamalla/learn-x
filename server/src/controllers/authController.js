@@ -1,8 +1,10 @@
+
 import bcrypt from 'bcryptjs';
 import User from '../models/User.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { ApiError } from '../utils/ApiError.js';
 import jwt from 'jsonwebtoken';
+
 import {
   signAccess,
   signRefresh,
@@ -64,6 +66,13 @@ export const login = asyncHandler(async (req, res) => {
     throw new ApiError(401, 'Invalid email or password');
   }
 
+  if (user.isBlocked) {
+    throw new ApiError(
+      403,
+      'Your account has been blocked. Please contact the administrator.'
+    );
+  }
+
   res
     .cookie('refreshToken', signRefresh(user), cookieOpts)
     .status(200)
@@ -98,6 +107,13 @@ export const refresh = asyncHandler(async (req, res) => {
 
   if (!user) {
     throw new ApiError(401, 'User not found');
+  }
+
+  if (user.isBlocked) {
+    throw new ApiError(
+      403,
+      'Your account has been blocked. Please contact the administrator.'
+    );
   }
 
   return res.status(200).json({
