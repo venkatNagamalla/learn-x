@@ -11,7 +11,7 @@ import {
 import { createPaymentOrder } from '../api/paymentApi.js';
 
 const formatPrice = (price) => {
-  if (price === 0) return 'Free';
+  if (Number(price) === 0) return 'Free';
 
   return new Intl.NumberFormat('en-IN', {
     style: 'currency',
@@ -27,7 +27,9 @@ const formatDuration = (seconds) => {
   const hours = Math.floor(minutes / 60);
   const remainingMinutes = minutes % 60;
 
-  if (hours > 0) return `${hours}h ${remainingMinutes}m`;
+  if (hours > 0) {
+    return `${hours}h ${remainingMinutes}m`;
+  }
 
   return `${minutes} min`;
 };
@@ -40,6 +42,7 @@ export default function CourseDetail() {
   const {
     selectedCourse,
     sections,
+    isEnrolled,
     detailStatus,
     error,
   } = useSelector((state) => state.courses);
@@ -63,11 +66,16 @@ export default function CourseDetail() {
   }, [dispatch, id]);
 
   const handleCoursePurchase = async () => {
+    if (!selectedCourse?._id || paymentLoading || isEnrolled) {
+      return;
+    }
+
     setPaymentError('');
 
-    if (!isFreeCourse && !/^\d{10,15}$/.test(phone.trim())) {
+    // Paid courses require a valid phone number.
+    if (!isFreeCourse && !/^\d{10,15}$/.test(phone)) {
       setPaymentError(
-        'Please enter a valid phone number containing 10 to 15 digits.'
+        'Please provide a valid phone number containing 10 to 15 digits.'
       );
       return;
     }
@@ -75,20 +83,27 @@ export default function CourseDetail() {
     try {
       setPaymentLoading(true);
 
+      // Free courses are enrolled immediately.
+      // Paid courses send the phone number required by PayU.
       const response = await createPaymentOrder(
         selectedCourse._id,
-        isFreeCourse ? undefined : phone.trim()
+        phone
       );
 
       if (response.free) {
-        navigate(`/student/courses/${selectedCourse._id}/learn`);
+        navigate('/student');
         return;
       }
 
-      if (!response.checkoutUrl || !response.checkoutFields) {
+      if (
+        !response.checkoutUrl ||
+        !response.checkoutFields ||
+        typeof response.checkoutFields !== 'object'
+      ) {
         throw new Error('Invalid payment checkout response.');
       }
 
+      // Submit server-generated PayU checkout fields.
       const form = document.createElement('form');
 
       form.method = 'POST';
@@ -150,7 +165,9 @@ export default function CourseDetail() {
     );
   }
 
-  if (!selectedCourse) return null;
+  if (!selectedCourse) {
+    return null;
+  }
 
   return (
     <main className="min-h-screen bg-slate-50 px-4 py-10 sm:px-6 lg:px-10">
@@ -193,7 +210,8 @@ export default function CourseDetail() {
               <span className="text-amber-600">
                 ★ {Number(selectedCourse.ratingAvg || 0).toFixed(1)}
                 <span className="text-slate-500">
-                  {' '}({selectedCourse.ratingCount || 0} ratings)
+                  {' '}
+                  ({selectedCourse.ratingCount || 0} ratings)
                 </span>
               </span>
             </div>
@@ -216,17 +234,19 @@ export default function CourseDetail() {
 
               {isStudent && (
                 <>
-                  {isFreeCourse ? (
-                    <button
-                      type="button"
-                      onClick={handleCoursePurchase}
-                      disabled={paymentLoading}
-                      className="mt-5 w-full rounded-lg bg-indigo-600 px-6 py-3 text-center font-semibold text-white transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-60"
-                    >
-                      {paymentLoading
-                        ? 'Enrolling...'
-                        : 'Enroll & Start Learning'}
-                    </button>
+                  {isEnrolled ? (
+                    <div className="mt-5">
+                      <p className="mb-3 rounded-lg bg-green-50 px-4 py-3 text-center text-sm font-medium text-green-700">
+                        You are enrolled in this course.
+                      </p>
+
+                      <Link
+                        to={`/student/courses/${selectedCourse._id}/learn`}
+                        className="block w-full rounded-lg bg-indigo-600 px-6 py-3 text-center font-semibold text-white transition hover:bg-indigo-700"
+                      >
+                        Continue Learning
+                      </Link>
+                    </div>
                   ) : (
                     <>
                       <Link
@@ -236,28 +256,39 @@ export default function CourseDetail() {
                         Watch Preview Lessons
                       </Link>
 
-                      <div className="mt-5">
-                        <label
-                          htmlFor="payment-phone"
-                          className="mb-2 block text-sm font-medium text-slate-700"
-                        >
-                          Phone Number
-                        </label>
+                      {!isFreeCourse && (
+                        <div className="mt-4">
+                          <label
+                            htmlFor="payment-phone"
+                            className="mb-2 block text-sm font-medium text-slate-700"
+                          >
+                            Phone Number
+                          </label>
 
-                        <input
-                          id="payment-phone"
-                          type="tel"
-                          inputMode="numeric"
-                          autoComplete="tel"
-                          value={phone}
-                          onChange={(event) =>
-                            setPhone(event.target.value)
-                          }
-                          placeholder="Enter your phone number"
-                          maxLength={15}
-                          className="w-full rounded-lg border border-slate-300 px-4 py-3 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
-                        />
-                      </div>
+                          <input
+                            id="payment-phone"
+                            type="tel"
+                            inputMode="numeric"
+                            autoComplete="tel"
+                            value={phone}
+                            onChange={(event) => {
+                              setPhone(
+                                event.target.value
+                                  .replace(/\D/g, '')
+                                  .slice(0, 15)
+                              );
+                              setPaymentError('');
+                            }}
+                            placeholder="Enter 10 to 15 digits"
+                            maxLength={15}
+                            className="w-full rounded-lg border border-slate-300 px-4 py-3 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
+                          />
+
+                          <p className="mt-1 text-xs text-slate-500">
+                            Enter your phone number for PayU checkout.
+                          </p>
+                        </div>
+                      )}
 
                       <button
                         type="button"
@@ -266,8 +297,12 @@ export default function CourseDetail() {
                         className="mt-3 w-full rounded-lg bg-indigo-600 px-6 py-3 font-semibold text-white transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-60"
                       >
                         {paymentLoading
-                          ? 'Redirecting to PayU...'
-                          : `Buy Course - ${formatPrice(selectedCourse.price)}`}
+                          ? isFreeCourse
+                            ? 'Enrolling...'
+                            : 'Redirecting to PayU...'
+                          : isFreeCourse
+                            ? 'Enroll & Start Learning'
+                            : `Buy Course - ${formatPrice(selectedCourse.price)}`}
                       </button>
                     </>
                   )}
@@ -295,9 +330,11 @@ export default function CourseDetail() {
                 </p>
               )}
 
-              <p className="mt-3 text-center text-xs text-slate-500">
-                Payments are securely processed through PayU Hosted Checkout.
-              </p>
+              {!isEnrolled && (
+                <p className="mt-3 text-center text-xs text-slate-500">
+                  Payments are securely processed through PayU Hosted Checkout.
+                </p>
+              )}
             </div>
           </div>
         </div>

@@ -15,6 +15,8 @@ import quizRoutes from './routes/quizRoutes.js';
 import liveClassRoutes from './routes/liveClassRoutes.js';
 import certificateRoutes from './routes/certificateRoutes.js';
 import paymentRoutes from './routes/paymentRoutes.js';
+import enrollmentRoutes from './routes/enrollmentRoutes.js';
+import earningRoutes from './routes/earningRoutes.js';
 
 const app = express();
 
@@ -45,6 +47,12 @@ app.use('/api/auth', authRoutes);
 
 // Course management routes
 app.use('/api/courses', courseRoutes);
+
+// Enrollment and My Learning routes
+app.use('/api/enrollments', enrollmentRoutes);
+
+// Instructor earnings routes
+app.use('/api/earnings', earningRoutes);
 
 // Admin routes
 app.use('/api/admin', adminRoutes);

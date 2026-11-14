@@ -6,20 +6,27 @@ import {
   requireRole,
 } from '../middleware/auth.js';
 
+import { requireEnrollment } from '../middleware/requireEnrollment.js';
+
 import {
   getStudentLessonPlayback,
 } from '../controllers/studentLessonController.js';
 
 const router = express.Router();
 
-// Only authenticated students, instructors, and admins
-// can access the playback endpoint.
 router.use(
   protect,
   requireRole('student', 'instructor', 'admin')
 );
 
-// Generate signed CloudFront playback access
-router.get('/:id/playback', getStudentLessonPlayback);
+// Preview lessons remain accessible without enrollment.
+router.get(
+  '/:id/playback',
+  requireEnrollment({
+    resource: 'lesson',
+    allowPreview: true,
+  }),
+  getStudentLessonPlayback
+);
 
 export default router;

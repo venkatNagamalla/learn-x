@@ -5,10 +5,16 @@ import { Link, useSearchParams } from 'react-router-dom';
 import { getPaymentStatus } from '../api/paymentApi.js';
 
 const formatAmount = (amount, currency = 'INR') => {
+  const value = Number(amount);
+
+  if (!Number.isFinite(value)) {
+    return 'Amount unavailable';
+  }
+
   return new Intl.NumberFormat('en-IN', {
     style: 'currency',
     currency,
-  }).format(amount / 100);
+  }).format(value / 100);
 };
 
 export default function PaymentResult() {
@@ -31,15 +37,22 @@ export default function PaymentResult() {
       }
 
       try {
+        // Always retrieve payment status from the backend.
+        // Never trust the payment status in the redirect URL.
         const data = await getPaymentStatus(txnid);
 
         if (active) {
+          if (!data?.payment) {
+            throw new Error('Payment information is unavailable.');
+          }
+
           setPayment(data.payment);
         }
       } catch (err) {
         if (active) {
           setError(
             err.response?.data?.message ||
+              err.message ||
               'Unable to retrieve payment status.'
           );
         }
@@ -60,19 +73,23 @@ export default function PaymentResult() {
   if (loading) {
     return (
       <div className="mx-auto max-w-2xl p-8 text-center">
-        <p className="text-lg font-medium">Checking payment status...</p>
+        <p className="text-lg font-medium">
+          Checking payment status...
+        </p>
       </div>
     );
   }
 
-  if (error) {
+  if (error || !payment) {
     return (
       <div className="mx-auto max-w-2xl p-8 text-center">
         <h1 className="mb-3 text-2xl font-bold">
           Payment Status Unavailable
         </h1>
 
-        <p className="mb-6 text-gray-600">{error}</p>
+        <p className="mb-6 text-gray-600">
+          {error || 'Payment information is unavailable.'}
+        </p>
 
         <Link
           to="/student"
@@ -121,6 +138,7 @@ export default function PaymentResult() {
         <div className="mb-6 space-y-3 rounded-lg bg-gray-50 p-4 text-left">
           <div className="flex justify-between gap-4">
             <span className="text-gray-600">Course</span>
+
             <span className="text-right font-medium">
               {payment.course?.title || 'Course'}
             </span>
@@ -128,6 +146,7 @@ export default function PaymentResult() {
 
           <div className="flex justify-between gap-4">
             <span className="text-gray-600">Amount</span>
+
             <span className="font-medium">
               {formatAmount(payment.amount, payment.currency)}
             </span>
@@ -135,6 +154,7 @@ export default function PaymentResult() {
 
           <div className="flex justify-between gap-4">
             <span className="text-gray-600">Status</span>
+
             <span className="font-medium capitalize">
               {payment.status}
             </span>
@@ -142,8 +162,9 @@ export default function PaymentResult() {
 
           <div className="flex justify-between gap-4">
             <span className="text-gray-600">Transaction ID</span>
+
             <span className="break-all text-right text-sm">
-              {payment.txnid}
+              {payment.txnid || txnid}
             </span>
           </div>
         </div>

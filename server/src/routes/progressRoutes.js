@@ -6,6 +6,8 @@ import {
   requireRole,
 } from '../middleware/auth.js';
 
+import { requireEnrollment } from '../middleware/requireEnrollment.js';
+
 import {
   updateLessonProgress,
   getLessonProgress,
@@ -13,16 +15,28 @@ import {
 
 const router = express.Router();
 
-// Only authenticated users can access lesson progress.
 router.use(
   protect,
   requireRole('student', 'instructor', 'admin')
 );
 
-// Save lesson progress
-router.put('/lessons/:id', updateLessonProgress);
+// Preview lessons retain their existing access behavior.
+router.put(
+  '/lessons/:id',
+  requireEnrollment({
+    resource: 'lesson',
+    allowPreview: true,
+  }),
+  updateLessonProgress
+);
 
-// Get saved lesson progress
-router.get('/lessons/:id', getLessonProgress);
+router.get(
+  '/lessons/:id',
+  requireEnrollment({
+    resource: 'lesson',
+    allowPreview: true,
+  }),
+  getLessonProgress
+);
 
 export default router;

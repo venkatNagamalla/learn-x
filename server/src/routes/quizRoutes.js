@@ -15,9 +15,11 @@ import {
   requireRole,
 } from '../middleware/auth.js';
 
+import { requireEnrollment } from '../middleware/requireEnrollment.js';
+
 const router = express.Router();
 
-// Instructor: Create a quiz.
+// Instructor quiz management.
 router.post(
   '/quizzes',
   protect,
@@ -25,7 +27,6 @@ router.post(
   createQuiz
 );
 
-// Instructor: Get all quizzes for an owned course.
 router.get(
   '/courses/:id/quizzes',
   protect,
@@ -33,7 +34,6 @@ router.get(
   getCourseQuizzes
 );
 
-// Instructor: Update a quiz.
 router.put(
   '/quizzes/:id',
   protect,
@@ -41,7 +41,6 @@ router.put(
   updateQuiz
 );
 
-// Instructor: Delete a quiz.
 router.delete(
   '/quizzes/:id',
   protect,
@@ -49,19 +48,20 @@ router.delete(
   deleteQuiz
 );
 
-// Student: Get a quiz after enrollment verification.
+// Student quiz access requires enrollment.
 router.get(
   '/quizzes/:id',
   protect,
-  requireRole('student'),
+  requireRole('student', 'instructor', 'admin'),
+  requireEnrollment({ resource: 'quiz' }),
   getStudentQuiz
 );
 
-// Student: Submit quiz and receive server-calculated results.
 router.post(
   '/quizzes/:id/submit',
   protect,
   requireRole('student'),
+  requireEnrollment({ resource: 'quiz' }),
   submitQuiz
 );
 

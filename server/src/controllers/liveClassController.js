@@ -93,7 +93,6 @@ export const createLiveClass = asyncHandler(async (req, res) => {
 });
 
 // GET /api/live/upcoming
-
 export const getUpcomingLiveClasses = asyncHandler(
   async (req, res) => {
     let filter;
@@ -136,7 +135,6 @@ export const getUpcomingLiveClasses = asyncHandler(
     });
   }
 );
-
 
 // GET /api/live/:id/history
 // Only the owning instructor can view chat history after the class ends.
@@ -292,6 +290,7 @@ export const saveLiveClassMessage = asyncHandler(
 );
 
 // POST /api/live/:id/token
+// Access is authorized by requireEnrollment middleware.
 export const getLiveClassToken = asyncHandler(
   async (req, res) => {
     const liveClass = await LiveClass.findById(req.params.id);
@@ -308,26 +307,15 @@ export const getLiveClassToken = asyncHandler(
       req.user.role === 'instructor' &&
       String(liveClass.instructor) === String(req.user._id);
 
-    if (!isHost) {
-      if (req.user.role !== 'student') {
-        throw new ApiError(403, 'Access denied');
-      }
+    const isAdmin = req.user.role === 'admin';
 
-      const enrolled = await Enrollment.exists({
-        user: req.user._id,
-        course: liveClass.course,
-      });
-
-      if (!enrolled) {
-        throw new ApiError(403, 'Enroll to join this class');
-      }
-
-      if (liveClass.status !== 'live') {
-        throw new ApiError(
-          400,
-          'Class has not started yet'
-        );
-      }
+    // Students can join only after the instructor starts the class.
+    // The middleware has already verified their enrollment.
+    if (!isHost && !isAdmin && liveClass.status !== 'live') {
+      throw new ApiError(
+        400,
+        'Class has not started yet'
+      );
     }
 
     const at = new AccessToken(

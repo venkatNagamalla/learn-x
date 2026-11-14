@@ -20,7 +20,7 @@ export default function StudentDashboard() {
 
     try {
       const [courseResponse, liveResponse] = await Promise.all([
-        api.get('/courses/enrolled'),
+        api.get('/enrollments/mine'),
         getUpcomingLiveClasses(),
       ]);
 
@@ -29,7 +29,7 @@ export default function StudentDashboard() {
     } catch (error) {
       toast.error(
         error.response?.data?.message ||
-        'Failed to load your learning dashboard'
+          'Failed to load your learning dashboard'
       );
     } finally {
       setLoading(false);
@@ -55,6 +55,12 @@ export default function StudentDashboard() {
       dateStyle: 'medium',
       timeStyle: 'short',
     });
+  };
+
+  const getProgress = (value) => {
+    const progress = Number(value) || 0;
+
+    return Math.min(100, Math.max(0, progress));
   };
 
   if (loading) {
@@ -115,6 +121,14 @@ export default function StudentDashboard() {
 
                 if (!course) return null;
 
+                const lessonProgress = getProgress(
+                  enrollment.lessonProgress
+                );
+
+                const quizProgress = getProgress(
+                  enrollment.quizProgress
+                );
+
                 const completed = Boolean(enrollment.completedAt);
 
                 return (
@@ -122,13 +136,14 @@ export default function StudentDashboard() {
                     key={enrollment.enrollmentId}
                     className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm"
                   >
-                    {course.thumbnail && (
-                      <img
-                        src={course.thumbnail}
-                        alt={course.title}
-                        className="h-44 w-full object-cover"
-                      />
-                    )}
+                    <img
+                      src={
+                        course.thumbnail ||
+                        'https://placehold.co/640x360?text=Course'
+                      }
+                      alt={course.title}
+                      className="h-44 w-full object-cover"
+                    />
 
                     <div className="p-5">
                       <h3 className="text-lg font-bold text-slate-900">
@@ -144,13 +159,16 @@ export default function StudentDashboard() {
                       </p>
 
                       <div className="mt-5 space-y-4">
+
+                        {/* Lesson Progress */}
                         <div>
                           <div className="mb-1 flex justify-between text-sm">
                             <span className="text-slate-600">
                               Lesson Progress
                             </span>
+
                             <span className="font-semibold">
-                              {enrollment.lessonProgress}%
+                              {lessonProgress}%
                             </span>
                           </div>
 
@@ -158,19 +176,21 @@ export default function StudentDashboard() {
                             <div
                               className="h-full rounded-full bg-indigo-600"
                               style={{
-                                width: `${enrollment.lessonProgress}%`,
+                                width: `${lessonProgress}%`,
                               }}
                             />
                           </div>
                         </div>
 
+                        {/* Quiz Progress */}
                         <div>
                           <div className="mb-1 flex justify-between text-sm">
                             <span className="text-slate-600">
                               Quiz Progress
                             </span>
+
                             <span className="font-semibold">
-                              {enrollment.quizProgress}%
+                              {quizProgress}%
                             </span>
                           </div>
 
@@ -178,7 +198,7 @@ export default function StudentDashboard() {
                             <div
                               className="h-full rounded-full bg-emerald-600"
                               style={{
-                                width: `${enrollment.quizProgress}%`,
+                                width: `${quizProgress}%`,
                               }}
                             />
                           </div>

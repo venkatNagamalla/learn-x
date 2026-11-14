@@ -229,35 +229,24 @@ export const getCourseQuizzes = async (req, res) => {
   });
 };
 
-// Get a quiz for an enrolled student.
-// Never expose correctIndex or explanation before submission.
+// Get a quiz after requireEnrollment middleware authorizes access.
+// Never expose correctIndex or explanation through this endpoint.
 export const getStudentQuiz = async (req, res) => {
   if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
     return res.status(400).json({ message: 'Invalid quiz ID' });
   }
 
-  const quiz = await Quiz.findById(req.params.id);
+  // The route middleware has already checked enrollment,
+  // course ownership, or admin access.
+  const quiz = await Quiz.findById(req.params.id)
+    .select('-questions.correctIndex -questions.explanation');
 
   if (!quiz) {
     return res.status(404).json({ message: 'Quiz not found' });
   }
 
-  const enrollment = await Enrollment.findOne({
-    user: req.user._id,
-    course: quiz.course,
-  });
-
-  if (!enrollment) {
-    return res.status(403).json({
-      message: 'You must be enrolled in this course to access the quiz',
-    });
-  }
-
-  const studentQuiz = await Quiz.findById(req.params.id)
-    .select('-questions.correctIndex -questions.explanation');
-
   return res.status(200).json({
-    quiz: studentQuiz,
+    quiz,
   });
 };
 
@@ -321,7 +310,6 @@ export const submitQuiz = asyncHandler(async (req, res) => {
     let selectedIndex;
 
     if (typeof submittedAnswer === 'number') {
-      // Backward compatibility with the old format: [1, 0, ...]
       questionId = String(quizQuestion._id);
       selectedIndex = submittedAnswer;
     } else if (
