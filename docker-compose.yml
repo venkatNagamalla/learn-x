@@ -1,27 +1,54 @@
 
 services:
-  mongodb:
+  mongo:
     image: mongo:7
-    container_name: lms-mongodb
-    restart: unless-stopped
-    ports:
-      - "27017:27017"
-    environment:
-      MONGO_INITDB_ROOT_USERNAME: lms_admin
-      MONGO_INITDB_ROOT_PASSWORD: lms_dev_password
     volumes:
-      - mongodb_data:/data/db
+      - lms_mongodb_data:/data/db
 
   redis:
-    image: redis:7-alpine
-    container_name: lms-redis
-    restart: unless-stopped
-    ports:
-      - "6379:6379"
-    command: redis-server --appendonly yes
+    image: redis:7
+
+  api:
+    build: ./server
+    env_file: ./server/.env
+    environment:
+      NODE_ENV: production
+      MONGO_URI: mongodb://mongo:27017/lms
+      REDIS_URL: redis://redis:6379
+      CLIENT_URL: http://localhost:5173
     volumes:
-      - redis_data:/data
+      - ./server/keys:/app/keys:ro
+    ports:
+      - "5000:5000"
+    depends_on:
+      - mongo
+      - redis
+
+  worker:
+    build: ./server
+    command: node src/worker.js
+    env_file: ./server/.env
+    environment:
+      NODE_ENV: production
+      MONGO_URI: mongodb://mongo:27017/lms
+      REDIS_URL: redis://redis:6379
+    volumes:
+      - ./server/keys:/app/keys:ro
+    depends_on:
+      - mongo
+      - redis
+
+  client:
+    build:
+      context: ./client
+      args:
+        VITE_API_URL: http://localhost:5000/api
+        VITE_RAZORPAY_KEY_ID: rzp_test_xxxxx
+    ports:
+      - "5173:80"
+    depends_on:
+      - api
 
 volumes:
-  mongodb_data:
-  redis_data:
+  lms_mongodb_data:
+    external: true

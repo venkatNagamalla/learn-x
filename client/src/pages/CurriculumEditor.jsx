@@ -20,12 +20,21 @@ const ALLOWED_VIDEO_TYPES = [
 ];
 
 const STATUS_STYLES = {
-  none: 'bg-slate-100 text-slate-600',
+  none: 'bg-slate-100 text-slate-700',
   uploaded: 'bg-amber-100 text-amber-800',
   processing: 'bg-blue-100 text-blue-800',
-  ready: 'bg-green-100 text-green-800',
+  ready: 'bg-emerald-100 text-emerald-800',
   failed: 'bg-red-100 text-red-700',
 };
+
+const inputClass =
+  'w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-base text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100';
+
+const primaryButton =
+  'rounded-xl bg-indigo-600 px-5 py-3 text-base font-bold text-white transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50';
+
+const secondaryButton =
+  'rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-40';
 
 export default function CurriculumEditor() {
   const { id: courseId } = useParams();
@@ -44,7 +53,6 @@ export default function CurriculumEditor() {
   const [editingLesson, setEditingLesson] = useState(null);
   const [busy, setBusy] = useState(false);
 
-  // VIDEO UPLOAD STATE
   const [selectedVideoFiles, setSelectedVideoFiles] = useState({});
   const [uploadingLessonId, setUploadingLessonId] = useState(null);
   const [uploadProgress, setUploadProgress] = useState({});
@@ -75,14 +83,12 @@ export default function CurriculumEditor() {
     loadCurriculum();
   }, [loadCurriculum]);
 
-  // POLL VIDEO STATUS EVERY 5 SECONDS
+  // Automatically refresh pending video processing statuses.
   useEffect(() => {
     const pendingLessons = sections.flatMap((section) =>
       (section.lessons || [])
         .filter((lesson) =>
-          ['uploaded', 'processing'].includes(
-            lesson.processingStatus
-          )
+          ['uploaded', 'processing'].includes(lesson.processingStatus)
         )
         .map((lesson) => lesson._id)
     );
@@ -97,9 +103,7 @@ export default function CurriculumEditor() {
       await Promise.all(
         pendingLessons.map(async (lessonId) => {
           try {
-            const { data } = await api.get(
-              `/lessons/${lessonId}/status`
-            );
+            const { data } = await api.get(`/lessons/${lessonId}/status`);
 
             if (cancelled) return;
 
@@ -394,7 +398,7 @@ export default function CurriculumEditor() {
     }
   };
 
-  // UPDATE A LESSON'S STATUS IN THE UI
+  // UPDATE VIDEO STATUS IN THE UI
 
   const updateLessonStatus = (lessonId, status) => {
     setSections((previous) =>
@@ -432,14 +436,13 @@ export default function CurriculumEditor() {
     event.target.value = '';
   };
 
-  // UPLOAD FILE TO S3 WITH REAL-TIME PROGRESS
+  // DIRECT S3 UPLOAD WITH PROGRESS
 
   const uploadFileToS3 = (uploadUrl, file, lessonId) =>
     new Promise((resolve, reject) => {
       const xhr = new XMLHttpRequest();
 
       xhr.open('PUT', uploadUrl);
-
       xhr.setRequestHeader('Content-Type', file.type);
 
       xhr.upload.addEventListener('progress', (event) => {
@@ -510,8 +513,6 @@ export default function CurriculumEditor() {
         [lessonId]: 0,
       }));
 
-      // STEP 1: Request a presigned S3 upload URL.
-
       setUploadFeedback((previous) => ({
         ...previous,
         [lessonId]: 'Generating secure upload URL...',
@@ -529,16 +530,12 @@ export default function CurriculumEditor() {
         throw new Error('Upload URL was not returned by the server.');
       }
 
-      // STEP 2: Upload directly to S3 with progress tracking.
-
       setUploadFeedback((previous) => ({
         ...previous,
         [lessonId]: 'Uploading video to AWS S3...',
       }));
 
       await uploadFileToS3(data.uploadUrl, file, lessonId);
-
-      // STEP 3: Verify upload and queue processing.
 
       setUploadFeedback((previous) => ({
         ...previous,
@@ -587,9 +584,7 @@ export default function CurriculumEditor() {
     try {
       setRetryingLessonId(lessonId);
 
-      const { data } = await api.post(
-        `/lessons/${lessonId}/retry`
-      );
+      const { data } = await api.post(`/lessons/${lessonId}/retry`);
 
       updateLessonStatus(lessonId, 'uploaded');
 
@@ -611,526 +606,743 @@ export default function CurriculumEditor() {
     }
   };
 
+  const totalLessons = sections.reduce(
+    (total, section) => total + (section.lessons || []).length,
+    0
+  );
+
+  const readyVideos = sections.reduce(
+    (total, section) =>
+      total +
+      (section.lessons || []).filter(
+        (lesson) => lesson.processingStatus === 'ready'
+      ).length,
+    0
+  );
+
   if (loading) {
     return (
-      <div className="py-20 text-center text-slate-600">
-        Loading curriculum...
+      <div className="flex min-h-[60vh] flex-col items-center justify-center gap-4 bg-slate-50">
+        <div className="h-12 w-12 animate-spin rounded-full border-4 border-indigo-100 border-t-indigo-600" />
+        <p className="text-lg font-medium text-slate-600">
+          Loading curriculum...
+        </p>
       </div>
     );
   }
 
   if (!course) {
     return (
-      <div className="py-20 text-center">
-        Course not found or you are not authorized to manage it.
-        <Link
-          to="/instructor"
-          className="ml-2 text-indigo-600 underline"
-        >
-          Back to My Courses
-        </Link>
-      </div>
+      <main className="flex min-h-[60vh] items-center justify-center bg-slate-50 px-4">
+        <div className="max-w-lg rounded-2xl border border-slate-200 bg-white p-8 text-center shadow-sm">
+          <div className="text-5xl">📚</div>
+          <h2 className="mt-4 text-2xl font-bold text-slate-900">
+            Course not found
+          </h2>
+          <p className="mt-2 text-base text-slate-600">
+            This course could not be found or you are not authorized to manage it.
+          </p>
+          <Link
+            to="/instructor/courses"
+            className="mt-5 inline-flex rounded-xl bg-indigo-600 px-5 py-3 font-bold text-white"
+            style={{ color: '#FFFFFF' }}
+          >
+            Back to My Courses
+          </Link>
+        </div>
+      </main>
     );
   }
 
   return (
-    <main className="min-h-screen bg-slate-50 px-4 py-10 sm:px-6">
-      <div className="mx-auto max-w-4xl">
+    <main className="min-h-screen bg-slate-50 px-4 py-6 sm:px-6 lg:px-8">
+      <div className="mx-auto max-w-6xl">
 
+        {/* HEADER */}
         <Link
           to={`/instructor/courses/${courseId}/edit`}
-          className="text-sm font-medium text-indigo-600 hover:underline"
+          className="inline-flex items-center gap-2 text-base font-semibold text-indigo-600 hover:text-indigo-800"
         >
           ← Back to Course Details
         </Link>
 
-        <div className="mt-6">
-          <p className="text-sm font-semibold uppercase tracking-wider text-indigo-600">
-            Curriculum Editor
-          </p>
+        <section className="relative mt-5 overflow-hidden rounded-3xl bg-gradient-to-r from-indigo-700 via-indigo-600 to-violet-600 px-6 py-7 shadow-lg sm:px-8">
+          <div className="pointer-events-none absolute -right-12 -top-20 h-56 w-56 rounded-full border-[30px] border-white/10" />
 
-          <h1 className="mt-2 text-3xl font-bold text-slate-900">
-            {course.title}
-          </h1>
+          <div className="relative">
+            <p
+              className="text-base font-bold uppercase tracking-[0.16em]"
+              style={{ color: '#E0E7FF' }}
+            >
+              Instructor Workspace / Curriculum
+            </p>
 
-          <p className="mt-2 text-slate-600">
-            Organize your course into sections and lessons.
-          </p>
+            <h1
+              className="mt-3 text-3xl font-bold sm:text-4xl"
+              style={{ color: '#FFFFFF' }}
+            >
+              {course.title}
+            </h1>
 
-          <p className="mt-3 inline-block rounded-full bg-indigo-50 px-3 py-1 text-sm font-medium capitalize text-indigo-700">
-            Status: {course.status}
-          </p>
-        </div>
+            <p
+              className="mt-3 max-w-2xl text-lg leading-7"
+              style={{ color: '#EEF2FF' }}
+            >
+              Build a structured learning experience by organizing your course into sections and lessons.
+            </p>
+
+            <div className="mt-5 flex flex-wrap items-center gap-3">
+              <span
+                className="rounded-full border border-white/20 bg-white/15 px-4 py-2 text-sm font-bold capitalize"
+                style={{ color: '#FFFFFF' }}
+              >
+                Status: {course.status}
+              </span>
+
+              <span
+                className="rounded-full border border-white/20 bg-white/15 px-4 py-2 text-sm font-bold"
+                style={{ color: '#FFFFFF' }}
+              >
+                {sections.length} Sections
+              </span>
+
+              <span
+                className="rounded-full border border-white/20 bg-white/15 px-4 py-2 text-sm font-bold"
+                style={{ color: '#FFFFFF' }}
+              >
+                {totalLessons} Lessons
+              </span>
+            </div>
+          </div>
+        </section>
+
+        
+{/* OVERVIEW */}
+<div className="mt-5 grid gap-4 sm:grid-cols-3">
+  <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+    <p className="text-base font-semibold text-slate-500">
+      Total Sections
+    </p>
+    <p
+      className="mt-2 font-bold tracking-tight text-slate-900"
+      style={{ fontSize: '44px', lineHeight: 1.15 }}
+    >
+      {sections.length}
+    </p>
+  </div>
+
+  <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+    <p className="text-base font-semibold text-slate-500">
+      Total Lessons
+    </p>
+    <p
+      className="mt-2 font-bold tracking-tight text-slate-900"
+      style={{ fontSize: '44px', lineHeight: 1.15 }}
+    >
+      {totalLessons}
+    </p>
+  </div>
+
+  <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+    <p className="text-base font-semibold text-slate-500">
+      Videos Ready
+    </p>
+    <p
+      className="mt-2 font-bold tracking-tight text-emerald-600"
+      style={{ fontSize: '44px', lineHeight: 1.15 }}
+    >
+      {readyVideos}
+    </p>
+  </div>
+</div>
+
 
         {/* ADD SECTION */}
+        <section className="mt-6 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+          <div className="mb-4">
+            <h2 className="text-xl font-bold text-slate-900 sm:text-2xl">
+              Add a New Section
+            </h2>
+            <p className="mt-1 text-base text-slate-500">
+              Sections help divide your course into organized topics.
+            </p>
+          </div>
 
-        <form
-          onSubmit={addSection}
-          className="mt-8 flex flex-col gap-3 rounded-xl border border-slate-200 bg-white p-5 sm:flex-row"
-        >
-          <input
-            value={newSectionTitle}
-            onChange={(event) => setNewSectionTitle(event.target.value)}
-            placeholder="Enter new section title"
-            className="flex-1 rounded-lg border border-slate-300 px-4 py-3 outline-none focus:border-indigo-500"
-          />
-
-          <button
-            type="submit"
-            disabled={addingSection || busy}
-            className="rounded-lg bg-indigo-600 px-6 py-3 font-semibold text-white hover:bg-indigo-700 disabled:opacity-50"
+          <form
+            onSubmit={addSection}
+            className="flex flex-col gap-3 sm:flex-row"
           >
-            {addingSection ? 'Adding...' : '+ Add Section'}
-          </button>
-        </form>
+            <input
+              value={newSectionTitle}
+              onChange={(event) => setNewSectionTitle(event.target.value)}
+              placeholder="Enter section title"
+              className={inputClass}
+            />
+
+            <button
+              type="submit"
+              disabled={addingSection || busy}
+              className={`${primaryButton} shrink-0`}
+              style={{ color: '#FFFFFF' }}
+            >
+              {addingSection ? 'Adding...' : '+ Add Section'}
+            </button>
+          </form>
+        </section>
 
         {/* SECTIONS */}
+        <div className="mt-6">
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h2 className="text-2xl font-bold text-slate-900">
+                Course Curriculum
+              </h2>
+              <p className="mt-1 text-base text-slate-500">
+                Manage your sections, lessons, and video content.
+              </p>
+            </div>
+          </div>
 
-        <div className="mt-8 space-y-5">
           {sections.length === 0 && (
-            <div className="rounded-xl border border-slate-200 bg-white p-8 text-center text-slate-500">
-              No sections yet. Add your first section above.
+            <div className="rounded-2xl border border-dashed border-slate-300 bg-white px-6 py-12 text-center">
+              <div className="text-5xl">🗂️</div>
+              <h3 className="mt-4 text-xl font-bold text-slate-800">
+                No sections yet
+              </h3>
+              <p className="mt-2 text-base text-slate-500">
+                Add your first section above to start building your curriculum.
+              </p>
             </div>
           )}
 
-          {sections.map((section, index) => (
-            <div
-              key={section._id}
-              className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm"
-            >
-              <div className="flex flex-wrap items-center justify-between gap-3">
-
-                {editingSectionId === section._id ? (
-                  <div className="flex flex-1 flex-wrap gap-2">
-                    <input
-                      value={editingTitle}
-                      onChange={(event) => setEditingTitle(event.target.value)}
-                      className="min-w-0 flex-1 rounded-lg border border-slate-300 px-3 py-2"
-                    />
-
-                    <button
-                      type="button"
-                      disabled={busy}
-                      onClick={() => updateSection(section._id)}
-                      className="rounded-lg bg-green-600 px-4 py-2 text-sm font-semibold text-white"
-                    >
-                      Save
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setEditingSectionId(null);
-                        setEditingTitle('');
-                      }}
-                      className="rounded-lg border border-slate-300 px-4 py-2 text-sm"
-                    >
-                      Cancel
-                    </button>
-                  </div>
-                ) : (
-                  <>
-                    <h2 className="font-bold text-slate-900">
-                      Section {index + 1}: {section.title}
-                    </h2>
-
-                    <div className="flex flex-wrap gap-2">
-                      <button
-                        type="button"
-                        disabled={busy || index === 0}
-                        onClick={() => moveSection(index, -1)}
-                        className="rounded-lg border border-slate-300 px-3 py-2 text-sm disabled:opacity-40"
-                      >
-                        ↑
-                      </button>
-
-                      <button
-                        type="button"
-                        disabled={busy || index === sections.length - 1}
-                        onClick={() => moveSection(index, 1)}
-                        className="rounded-lg border border-slate-300 px-3 py-2 text-sm disabled:opacity-40"
-                      >
-                        ↓
-                      </button>
+          <div className="space-y-5">
+            {sections.map((section, index) => (
+              <section
+                key={section._id}
+                className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm"
+              >
+                {/* SECTION HEADER */}
+                <div className="border-b border-slate-100 bg-slate-50/80 p-5 sm:p-6">
+                  {editingSectionId === section._id ? (
+                    <div className="flex flex-col gap-3 sm:flex-row">
+                      <input
+                        value={editingTitle}
+                        onChange={(event) => setEditingTitle(event.target.value)}
+                        className={inputClass}
+                        autoFocus
+                      />
 
                       <button
                         type="button"
                         disabled={busy}
-                        onClick={() => startEditingSection(section)}
-                        className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium hover:bg-slate-50"
+                        onClick={() => updateSection(section._id)}
+                        className="rounded-xl bg-emerald-600 px-5 py-3 font-bold text-white disabled:opacity-50"
+                        style={{ color: '#FFFFFF' }}
                       >
-                        Edit
+                        Save
                       </button>
 
                       <button
                         type="button"
-                        disabled={busy}
-                        onClick={() => deleteSection(section._id)}
-                        className="rounded-lg border border-red-200 px-3 py-2 text-sm font-medium text-red-600 hover:bg-red-50"
+                        onClick={() => {
+                          setEditingSectionId(null);
+                          setEditingTitle('');
+                        }}
+                        className={secondaryButton}
                       >
-                        Delete
+                        Cancel
                       </button>
                     </div>
-                  </>
-                )}
-              </div>
-
-              {/* LESSON LIST */}
-
-              <div className="mt-5 space-y-3">
-                {(section.lessons || []).map((lesson, lessonIndex) => {
-                  const videoStatus = lesson.processingStatus || 'none';
-
-                  return (
-                    <div
-                      key={lesson._id}
-                      className="rounded-lg border border-slate-200 bg-slate-50 p-4"
-                    >
-                      {editingLesson?._id === lesson._id ? (
-                        <div className="space-y-3">
-                          <input
-                            value={editingLesson.title}
-                            onChange={(event) =>
-                              setEditingLesson((previous) => ({
-                                ...previous,
-                                title: event.target.value,
-                              }))
-                            }
-                            placeholder="Lesson title"
-                            className="w-full rounded-lg border border-slate-300 px-3 py-2"
-                          />
-
-                          <textarea
-                            value={editingLesson.description}
-                            onChange={(event) =>
-                              setEditingLesson((previous) => ({
-                                ...previous,
-                                description: event.target.value,
-                              }))
-                            }
-                            placeholder="Lesson description"
-                            className="w-full rounded-lg border border-slate-300 px-3 py-2"
-                          />
-
-                          <input
-                            type="number"
-                            min="0"
-                            value={editingLesson.duration}
-                            onChange={(event) =>
-                              setEditingLesson((previous) => ({
-                                ...previous,
-                                duration: event.target.value,
-                              }))
-                            }
-                            placeholder="Duration in minutes"
-                            className="w-full rounded-lg border border-slate-300 px-3 py-2"
-                          />
-
-                          <label className="flex items-center gap-2 text-sm">
-                            <input
-                              type="checkbox"
-                              checked={editingLesson.isPreview}
-                              onChange={(event) =>
-                                setEditingLesson((previous) => ({
-                                  ...previous,
-                                  isPreview: event.target.checked,
-                                }))
-                              }
-                            />
-                            Free preview lesson
-                          </label>
-
-                          <div className="flex gap-2">
-                            <button
-                              type="button"
-                              disabled={busy}
-                              onClick={updateLesson}
-                              className="rounded-lg bg-green-600 px-4 py-2 text-sm font-semibold text-white"
-                            >
-                              Save Lesson
-                            </button>
-
-                            <button
-                              type="button"
-                              onClick={() => setEditingLesson(null)}
-                              className="rounded-lg border border-slate-300 px-4 py-2 text-sm"
-                            >
-                              Cancel
-                            </button>
-                          </div>
+                  ) : (
+                    <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-center">
+                      <div className="flex items-start gap-4">
+                        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-indigo-100 text-lg font-bold text-indigo-700">
+                          {index + 1}
                         </div>
-                      ) : (
-                        <div className="flex flex-wrap items-center justify-between gap-3">
-                          <div>
-                            <p className="font-medium text-slate-800">
-                              {lessonIndex + 1}. {lesson.title}
-                            </p>
 
-                            {lesson.description && (
-                              <p className="mt-1 text-sm text-slate-500">
-                                {lesson.description}
-                              </p>
+                        <div>
+                          <p className="text-sm font-bold uppercase tracking-wide text-indigo-600">
+                            Section {index + 1}
+                          </p>
+                          <h3 className="mt-1 text-xl font-bold text-slate-900">
+                            {section.title}
+                          </h3>
+                          <p className="mt-1 text-sm text-slate-500">
+                            {(section.lessons || []).length} Lessons
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="flex flex-wrap gap-2">
+                        <button
+                          type="button"
+                          disabled={busy || index === 0}
+                          onClick={() => moveSection(index, -1)}
+                          className={secondaryButton}
+                          title="Move section up"
+                        >
+                          ↑ Move Up
+                        </button>
+
+                        <button
+                          type="button"
+                          disabled={busy || index === sections.length - 1}
+                          onClick={() => moveSection(index, 1)}
+                          className={secondaryButton}
+                          title="Move section down"
+                        >
+                          ↓ Move Down
+                        </button>
+
+                        <button
+                          type="button"
+                          disabled={busy}
+                          onClick={() => startEditingSection(section)}
+                          className="rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-2.5 text-sm font-bold text-indigo-700 transition hover:bg-indigo-100 disabled:opacity-50"
+                        >
+                          Edit
+                        </button>
+
+                        <button
+                          type="button"
+                          disabled={busy}
+                          onClick={() => deleteSection(section._id)}
+                          className="rounded-xl border border-red-200 bg-red-50 px-4 py-2.5 text-sm font-bold text-red-600 transition hover:bg-red-100 disabled:opacity-50"
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                <div className="space-y-5 p-5 sm:p-6">
+
+                  {/* LESSON LIST */}
+                  <div className="space-y-4">
+                    {(section.lessons || []).map((lesson, lessonIndex) => {
+                      const videoStatus = lesson.processingStatus || 'none';
+
+                      return (
+                        <article
+                          key={lesson._id}
+                          className="overflow-hidden rounded-2xl border border-slate-200 bg-white"
+                        >
+                          {/* LESSON DETAILS */}
+                          <div className="p-4 sm:p-5">
+                            {editingLesson?._id === lesson._id ? (
+                              <div className="space-y-4">
+                                <div>
+                                  <label className="mb-2 block text-sm font-bold text-slate-700">
+                                    Lesson Title
+                                  </label>
+                                  <input
+                                    value={editingLesson.title}
+                                    onChange={(event) =>
+                                      setEditingLesson((previous) => ({
+                                        ...previous,
+                                        title: event.target.value,
+                                      }))
+                                    }
+                                    placeholder="Lesson title"
+                                    className={inputClass}
+                                  />
+                                </div>
+
+                                <div>
+                                  <label className="mb-2 block text-sm font-bold text-slate-700">
+                                    Description
+                                  </label>
+                                  <textarea
+                                    value={editingLesson.description}
+                                    onChange={(event) =>
+                                      setEditingLesson((previous) => ({
+                                        ...previous,
+                                        description: event.target.value,
+                                      }))
+                                    }
+                                    placeholder="Lesson description"
+                                    rows={3}
+                                    className={inputClass}
+                                  />
+                                </div>
+
+                                <div>
+                                  <label className="mb-2 block text-sm font-bold text-slate-700">
+                                    Duration (minutes)
+                                  </label>
+                                  <input
+                                    type="number"
+                                    min="0"
+                                    value={editingLesson.duration}
+                                    onChange={(event) =>
+                                      setEditingLesson((previous) => ({
+                                        ...previous,
+                                        duration: event.target.value,
+                                      }))
+                                    }
+                                    placeholder="Duration in minutes"
+                                    className={inputClass}
+                                  />
+                                </div>
+
+                                <label className="flex items-center gap-3 text-base font-medium text-slate-700">
+                                  <input
+                                    type="checkbox"
+                                    checked={editingLesson.isPreview}
+                                    onChange={(event) =>
+                                      setEditingLesson((previous) => ({
+                                        ...previous,
+                                        isPreview: event.target.checked,
+                                      }))
+                                    }
+                                    className="h-5 w-5 accent-indigo-600"
+                                  />
+                                  Free preview lesson
+                                </label>
+
+                                <div className="flex flex-wrap gap-3">
+                                  <button
+                                    type="button"
+                                    disabled={busy}
+                                    onClick={updateLesson}
+                                    className="rounded-xl bg-emerald-600 px-5 py-3 font-bold text-white disabled:opacity-50"
+                                    style={{ color: '#FFFFFF' }}
+                                  >
+                                    Save Lesson
+                                  </button>
+
+                                  <button
+                                    type="button"
+                                    onClick={() => setEditingLesson(null)}
+                                    className={secondaryButton}
+                                  >
+                                    Cancel
+                                  </button>
+                                </div>
+                              </div>
+                            ) : (
+                              <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-center">
+                                <div className="flex items-start gap-3">
+                                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-slate-100 font-bold text-slate-700">
+                                    {lessonIndex + 1}
+                                  </div>
+
+                                  <div>
+                                    <h4 className="text-lg font-bold text-slate-900">
+                                      {lesson.title}
+                                    </h4>
+
+                                    {lesson.description && (
+                                      <p className="mt-1 text-base leading-6 text-slate-600">
+                                        {lesson.description}
+                                      </p>
+                                    )}
+
+                                    <div className="mt-2 flex flex-wrap items-center gap-2 text-sm font-medium text-slate-500">
+                                      <span>
+                                        {lesson.duration || 0} minutes
+                                      </span>
+
+                                      {lesson.isPreview && (
+                                        <span className="rounded-full bg-emerald-100 px-3 py-1 font-bold text-emerald-700">
+                                          Free Preview
+                                        </span>
+                                      )}
+                                    </div>
+                                  </div>
+                                </div>
+
+                                <div className="flex flex-wrap gap-2">
+                                  <button
+                                    type="button"
+                                    disabled={busy || lessonIndex === 0}
+                                    onClick={() =>
+                                      moveLesson(section, lessonIndex, -1)
+                                    }
+                                    className={secondaryButton}
+                                    title="Move lesson up"
+                                  >
+                                    ↑
+                                  </button>
+
+                                  <button
+                                    type="button"
+                                    disabled={
+                                      busy ||
+                                      lessonIndex === section.lessons.length - 1
+                                    }
+                                    onClick={() =>
+                                      moveLesson(section, lessonIndex, 1)
+                                    }
+                                    className={secondaryButton}
+                                    title="Move lesson down"
+                                  >
+                                    ↓
+                                  </button>
+
+                                  <button
+                                    type="button"
+                                    disabled={busy}
+                                    onClick={() =>
+                                      startEditingLesson(lesson, section._id)
+                                    }
+                                    className="rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-2.5 text-sm font-bold text-indigo-700 hover:bg-indigo-100 disabled:opacity-50"
+                                  >
+                                    Edit
+                                  </button>
+
+                                  <button
+                                    type="button"
+                                    disabled={busy}
+                                    onClick={() => deleteLesson(lesson._id)}
+                                    className="rounded-xl border border-red-200 bg-red-50 px-4 py-2.5 text-sm font-bold text-red-600 hover:bg-red-100 disabled:opacity-50"
+                                  >
+                                    Delete
+                                  </button>
+                                </div>
+                              </div>
                             )}
-
-                            <p className="mt-1 text-xs text-slate-500">
-                              {lesson.duration || 0} minutes
-                              {lesson.isPreview && (
-                                <span className="ml-2 rounded-full bg-green-100 px-2 py-1 font-medium text-green-700">
-                                  Preview
-                                </span>
-                              )}
-                            </p>
                           </div>
 
-                          <div className="flex flex-wrap gap-2">
-                            <button
-                              type="button"
-                              disabled={busy || lessonIndex === 0}
-                              onClick={() => moveLesson(section, lessonIndex, -1)}
-                              className="rounded-lg border border-slate-300 px-3 py-2 text-sm disabled:opacity-40"
-                            >
-                              ↑
-                            </button>
+                          {/* VIDEO MANAGEMENT */}
+                          <div className="border-t border-slate-200 bg-slate-50 p-4 sm:p-5">
+                            <div className="flex flex-wrap items-center justify-between gap-3">
+                              <div>
+                                <h4 className="text-base font-bold text-slate-900">
+                                  Lesson Video
+                                </h4>
+                                <p className="mt-1 text-sm text-slate-500">
+                                  Upload and manage this lesson's video.
+                                </p>
+                              </div>
 
-                            <button
-                              type="button"
-                              disabled={
-                                busy ||
-                                lessonIndex === section.lessons.length - 1
-                              }
-                              onClick={() => moveLesson(section, lessonIndex, 1)}
-                              className="rounded-lg border border-slate-300 px-3 py-2 text-sm disabled:opacity-40"
-                            >
-                              ↓
-                            </button>
-
-                            <button
-                              type="button"
-                              disabled={busy}
-                              onClick={() =>
-                                startEditingLesson(lesson, section._id)
-                              }
-                              className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
-                            >
-                              Edit
-                            </button>
-
-                            <button
-                              type="button"
-                              disabled={busy}
-                              onClick={() => deleteLesson(lesson._id)}
-                              className="rounded-lg border border-red-200 px-3 py-2 text-sm text-red-600"
-                            >
-                              Delete
-                            </button>
-                          </div>
-                        </div>
-                      )}
-
-                      {/* VIDEO UPLOAD */}
-
-                      <div className="mt-4 border-t border-slate-200 pt-4">
-                        <div className="flex flex-wrap items-center justify-between gap-2">
-                          <h4 className="text-sm font-semibold text-slate-800">
-                            Lesson Video
-                          </h4>
-
-                          <span
-                            className={`rounded-full px-3 py-1 text-xs font-semibold capitalize ${STATUS_STYLES[videoStatus] || STATUS_STYLES.none}`}
-                          >
-                            {videoStatus}
-                          </span>
-                        </div>
-
-                        <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-center">
-                          <input
-                            type="file"
-                            accept="video/mp4,video/quicktime,video/webm"
-                            disabled={
-                              busy || uploadingLessonId !== null
-                            }
-                            onChange={(event) =>
-                              handleVideoFileChange(lesson._id, event)
-                            }
-                            className="block w-full text-sm text-slate-600 file:mr-3 file:rounded-lg file:border-0 file:bg-indigo-50 file:px-4 file:py-2 file:font-medium file:text-indigo-700 hover:file:bg-indigo-100"
-                          />
-
-                          <button
-                            type="button"
-                            disabled={
-                              busy ||
-                              uploadingLessonId !== null ||
-                              !selectedVideoFiles[lesson._id]
-                            }
-                            onClick={() => uploadLessonVideo(lesson._id)}
-                            className="shrink-0 rounded-lg bg-indigo-600 px-5 py-2 text-sm font-semibold text-white hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50"
-                          >
-                            {uploadingLessonId === lesson._id
-                              ? 'Uploading...'
-                              : 'Upload Video'}
-                          </button>
-                        </div>
-
-                        {/* UPLOAD PROGRESS BAR */}
-
-                        {uploadingLessonId === lesson._id && (
-                          <div className="mt-4">
-                            <div className="mb-1 flex justify-between text-xs font-medium text-slate-600">
-                              <span>Upload progress</span>
-                              <span>
-                                {uploadProgress[lesson._id] || 0}%
+                              <span
+                                className={`rounded-full px-3 py-1.5 text-sm font-bold capitalize ${
+                                  STATUS_STYLES[videoStatus] || STATUS_STYLES.none
+                                }`}
+                              >
+                                {videoStatus}
                               </span>
                             </div>
 
-                            <div
-                              className="h-3 w-full overflow-hidden rounded-full bg-slate-200"
-                              role="progressbar"
-                              aria-valuenow={uploadProgress[lesson._id] || 0}
-                              aria-valuemin="0"
-                              aria-valuemax="100"
-                            >
-                              <div
-                                className="h-full rounded-full bg-indigo-600 transition-all duration-200"
-                                style={{
-                                  width: `${uploadProgress[lesson._id] || 0}%`,
-                                }}
+                            <div className="mt-4 flex flex-col gap-3 lg:flex-row lg:items-center">
+                              <input
+                                type="file"
+                                accept="video/mp4,video/quicktime,video/webm"
+                                disabled={
+                                  busy || uploadingLessonId !== null
+                                }
+                                onChange={(event) =>
+                                  handleVideoFileChange(lesson._id, event)
+                                }
+                                className="block w-full min-w-0 text-sm text-slate-600 file:mr-3 file:rounded-lg file:border-0 file:bg-indigo-100 file:px-4 file:py-2.5 file:font-bold file:text-indigo-700 hover:file:bg-indigo-200"
                               />
+
+                              <button
+                                type="button"
+                                disabled={
+                                  busy ||
+                                  uploadingLessonId !== null ||
+                                  !selectedVideoFiles[lesson._id]
+                                }
+                                onClick={() => uploadLessonVideo(lesson._id)}
+                                className={`${primaryButton} shrink-0`}
+                                style={{ color: '#FFFFFF' }}
+                              >
+                                {uploadingLessonId === lesson._id
+                                  ? 'Uploading...'
+                                  : 'Upload Video'}
+                              </button>
                             </div>
+
+                            {uploadingLessonId === lesson._id && (
+                              <div className="mt-5">
+                                <div className="mb-2 flex justify-between text-sm font-bold text-slate-600">
+                                  <span>Upload Progress</span>
+                                  <span>
+                                    {uploadProgress[lesson._id] || 0}%
+                                  </span>
+                                </div>
+
+                                <div
+                                  className="h-3 w-full overflow-hidden rounded-full bg-slate-200"
+                                  role="progressbar"
+                                  aria-valuenow={uploadProgress[lesson._id] || 0}
+                                  aria-valuemin="0"
+                                  aria-valuemax="100"
+                                >
+                                  <div
+                                    className="h-full rounded-full bg-indigo-600 transition-all duration-200"
+                                    style={{
+                                      width: `${uploadProgress[lesson._id] || 0}%`,
+                                    }}
+                                  />
+                                </div>
+                              </div>
+                            )}
+
+                            {selectedVideoFiles[lesson._id] && (
+                              <p className="mt-3 break-all text-sm text-slate-600">
+                                <span className="font-bold">Selected:</span>{' '}
+                                {selectedVideoFiles[lesson._id].name} (
+                                {(
+                                  selectedVideoFiles[lesson._id].size /
+                                  (1024 * 1024)
+                                ).toFixed(2)} MB)
+                              </p>
+                            )}
+
+                            {uploadFeedback[lesson._id] && (
+                              <p className="mt-3 break-words rounded-xl bg-indigo-50 p-3 text-sm font-medium text-indigo-800">
+                                {uploadFeedback[lesson._id]}
+                              </p>
+                            )}
+
+                            {videoStatus === 'failed' && (
+                              <button
+                                type="button"
+                                disabled={
+                                  retryingLessonId !== null ||
+                                  uploadingLessonId !== null
+                                }
+                                onClick={() => retryLessonVideo(lesson._id)}
+                                className="mt-4 rounded-xl bg-red-600 px-5 py-3 font-bold text-white transition hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
+                                style={{ color: '#FFFFFF' }}
+                              >
+                                {retryingLessonId === lesson._id
+                                  ? 'Retrying...'
+                                  : 'Retry Processing'}
+                              </button>
+                            )}
+
+                            {['uploaded', 'processing'].includes(videoStatus) && (
+                              <p className="mt-3 text-sm font-medium text-blue-700">
+                                Video processing is in progress. Status refreshes automatically every 5 seconds.
+                              </p>
+                            )}
+
+                            <p className="mt-3 text-sm text-slate-500">
+                              Supported formats: MP4, MOV and WEBM. Maximum size: 200 MB.
+                            </p>
                           </div>
-                        )}
+                        </article>
+                      );
+                    })}
 
-                        {selectedVideoFiles[lesson._id] && (
-                          <p className="mt-2 text-xs text-slate-500">
-                            Selected: {selectedVideoFiles[lesson._id].name}
-                            {' '}(
-                            {(
-                              selectedVideoFiles[lesson._id].size /
-                              (1024 * 1024)
-                            ).toFixed(2)} MB)
-                          </p>
-                        )}
-
-                        {uploadFeedback[lesson._id] && (
-                          <p className="mt-3 break-words text-sm text-indigo-700">
-                            {uploadFeedback[lesson._id]}
-                          </p>
-                        )}
-
-                        {/* RETRY BUTTON */}
-
-                        {videoStatus === 'failed' && (
-                          <button
-                            type="button"
-                            disabled={
-                              retryingLessonId !== null ||
-                              uploadingLessonId !== null
-                            }
-                            onClick={() => retryLessonVideo(lesson._id)}
-                            className="mt-3 rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
-                          >
-                            {retryingLessonId === lesson._id
-                              ? 'Retrying...'
-                              : 'Retry Processing'}
-                          </button>
-                        )}
-
-                        {['uploaded', 'processing'].includes(videoStatus) && (
-                          <p className="mt-3 text-xs text-blue-700">
-                            Video processing is in progress. Status refreshes automatically every 5 seconds.
-                          </p>
-                        )}
-
-                        <p className="mt-2 text-xs text-slate-500">
-                          Supported formats: MP4, MOV and WEBM. Maximum size: 200 MB.
+                    {(section.lessons || []).length === 0 && (
+                      <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 px-4 py-7 text-center">
+                        <p className="text-base font-medium text-slate-500">
+                          No lessons in this section yet.
                         </p>
                       </div>
+                    )}
+                  </div>
+
+                  {/* ADD LESSON */}
+                  <form
+                    onSubmit={(event) => addLesson(event, section)}
+                    className="rounded-2xl border border-dashed border-indigo-300 bg-indigo-50/40 p-5"
+                  >
+                    <div className="mb-4">
+                      <h3 className="text-lg font-bold text-slate-900">
+                        + Add a Lesson
+                      </h3>
+                      <p className="mt-1 text-sm text-slate-500">
+                        Add the next learning topic to this section.
+                      </p>
                     </div>
-                  );
-                })}
 
-                {(section.lessons || []).length === 0 && (
-                  <p className="text-sm text-slate-500">
-                    No lessons in this section yet.
-                  </p>
-                )}
-              </div>
+                    <div className="space-y-4">
+                      <div>
+                        <label className="mb-2 block text-sm font-bold text-slate-700">
+                          Lesson Title
+                        </label>
+                        <input
+                          value={newLessons[section._id]?.title || ''}
+                          onChange={(event) =>
+                            handleNewLessonChange(
+                              section._id,
+                              'title',
+                              event.target.value
+                            )
+                          }
+                          placeholder="Enter lesson title"
+                          className={inputClass}
+                        />
+                      </div>
 
-              {/* ADD LESSON */}
+                      <div>
+                        <label className="mb-2 block text-sm font-bold text-slate-700">
+                          Description
+                        </label>
+                        <textarea
+                          value={newLessons[section._id]?.description || ''}
+                          onChange={(event) =>
+                            handleNewLessonChange(
+                              section._id,
+                              'description',
+                              event.target.value
+                            )
+                          }
+                          placeholder="Describe what this lesson covers"
+                          rows={3}
+                          className={inputClass}
+                        />
+                      </div>
 
-              <form
-                onSubmit={(event) => addLesson(event, section)}
-                className="mt-5 space-y-3 rounded-lg border border-dashed border-slate-300 p-4"
-              >
-                <h3 className="font-semibold text-slate-800">
-                  Add Lesson
-                </h3>
+                      <div>
+                        <label className="mb-2 block text-sm font-bold text-slate-700">
+                          Duration (minutes)
+                        </label>
+                        <input
+                          type="number"
+                          min="0"
+                          value={newLessons[section._id]?.duration ?? ''}
+                          onChange={(event) =>
+                            handleNewLessonChange(
+                              section._id,
+                              'duration',
+                              event.target.value
+                            )
+                          }
+                          placeholder="Enter duration in minutes"
+                          className={inputClass}
+                        />
+                      </div>
 
-                <input
-                  value={newLessons[section._id]?.title || ''}
-                  onChange={(event) =>
-                    handleNewLessonChange(
-                      section._id,
-                      'title',
-                      event.target.value
-                    )
-                  }
-                  placeholder="Lesson title"
-                  className="w-full rounded-lg border border-slate-300 px-3 py-2"
-                />
+                      <label className="flex items-center gap-3 text-base font-medium text-slate-700">
+                        <input
+                          type="checkbox"
+                          checked={newLessons[section._id]?.isPreview || false}
+                          onChange={(event) =>
+                            handleNewLessonChange(
+                              section._id,
+                              'isPreview',
+                              event.target.checked
+                            )
+                          }
+                          className="h-5 w-5 accent-indigo-600"
+                        />
+                        Make this a free preview lesson
+                      </label>
 
-                <textarea
-                  value={newLessons[section._id]?.description || ''}
-                  onChange={(event) =>
-                    handleNewLessonChange(
-                      section._id,
-                      'description',
-                      event.target.value
-                    )
-                  }
-                  placeholder="Lesson description"
-                  className="w-full rounded-lg border border-slate-300 px-3 py-2"
-                />
-
-                <input
-                  type="number"
-                  min="0"
-                  value={newLessons[section._id]?.duration ?? ''}
-                  onChange={(event) =>
-                    handleNewLessonChange(
-                      section._id,
-                      'duration',
-                      event.target.value
-                    )
-                  }
-                  placeholder="Duration in minutes"
-                  className="w-full rounded-lg border border-slate-300 px-3 py-2"
-                />
-
-                <label className="flex items-center gap-2 text-sm text-slate-600">
-                  <input
-                    type="checkbox"
-                    checked={newLessons[section._id]?.isPreview || false}
-                    onChange={(event) =>
-                      handleNewLessonChange(
-                        section._id,
-                        'isPreview',
-                        event.target.checked
-                      )
-                    }
-                  />
-                  Free preview lesson
-                </label>
-
-                <button
-                  type="submit"
-                  disabled={busy}
-                  className="rounded-lg bg-indigo-600 px-5 py-2 font-semibold text-white hover:bg-indigo-700 disabled:opacity-50"
-                >
-                  + Add Lesson
-                </button>
-              </form>
-            </div>
-          ))}
+                      <div className="pt-1">
+                        <button
+                          type="submit"
+                          disabled={busy}
+                          className={primaryButton}
+                          style={{ color: '#FFFFFF' }}
+                        >
+                          + Add Lesson
+                        </button>
+                      </div>
+                    </div>
+                  </form>
+                </div>
+              </section>
+            ))}
+          </div>
         </div>
       </div>
     </main>

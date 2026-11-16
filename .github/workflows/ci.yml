@@ -1,0 +1,45 @@
+
+name: CI
+
+on: [push, pull_request]
+
+jobs:
+  server:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: server/package-lock.json
+
+      - name: Install server dependencies and run tests
+        run: cd server && npm ci && npm test
+
+  client:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: client/package-lock.json
+
+      - name: Install client dependencies and build
+        run: cd client && npm ci && npm run build
+
+  images:
+    needs: [server, client]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build server Docker image
+        run: docker build -t learn-x-server ./server
+
+      - name: Build client Docker image
+        run: docker build -t learn-x-client ./client

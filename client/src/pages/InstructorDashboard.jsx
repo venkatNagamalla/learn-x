@@ -23,7 +23,7 @@ const formatCurrency = (paise = 0) =>
     style: 'currency',
     currency: 'INR',
     maximumFractionDigits: 0,
-  }).format(paise / 100);
+  }).format((Number(paise) || 0) / 100);
 
 const formatMonth = (year, month) =>
   new Date(year, month - 1).toLocaleDateString('en-IN', {
@@ -31,12 +31,59 @@ const formatMonth = (year, month) =>
     year: 'numeric',
   });
 
-const formatDate = (date) =>
-  new Date(date).toLocaleDateString('en-IN', {
+const formatDate = (date) => {
+  if (!date) return '—';
+
+  const parsedDate = new Date(date);
+
+  if (Number.isNaN(parsedDate.getTime())) return '—';
+
+  return parsedDate.toLocaleDateString('en-IN', {
     day: 'numeric',
     month: 'short',
     year: 'numeric',
   });
+};
+
+
+const SummaryCard = ({ title, value, description, icon, accent }) => (
+  <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition duration-200 hover:-translate-y-1 hover:shadow-md sm:p-6">
+    <div className="flex items-start justify-between gap-3">
+      <div>
+        <p className="text-[17px] font-medium text-slate-500">{title}</p>
+
+        <p
+          className="mt-3 font-bold tracking-tight text-slate-900"
+          style={{ fontSize: '44px', lineHeight: 1.15 }}
+        >
+          {value}
+        </p>
+      </div>
+
+      <div
+        className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-xl text-2xl ${accent}`}
+      >
+        {icon}
+      </div>
+    </div>
+
+    <p className="mt-3 text-base leading-6 text-slate-500">
+      {description}
+    </p>
+  </div>
+);
+
+const SectionHeading = ({ title, description, action }) => (
+  <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
+    <div>
+      <h2 className="text-xl font-bold text-slate-900 sm:text-2xl">
+        {title}
+      </h2>
+      <p className="mt-1 text-[17px] text-slate-500">{description}</p>
+    </div>
+    {action}
+  </div>
+);
 
 export default function InstructorDashboard() {
   const [summary, setSummary] = useState(null);
@@ -57,48 +104,57 @@ export default function InstructorDashboard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
-  const loadTransactions = useCallback(async (page = 1, filter = payoutFilter) => {
-    try {
-      setTransactionLoading(true);
+  const loadTransactions = useCallback(
+    async (page = 1, filter = payoutFilter) => {
+      try {
+        setTransactionLoading(true);
 
-      const data = await getEarningsTransactions({
-        page,
-        limit: 10,
-        payoutStatus: filter === 'all' ? undefined : filter,
-      });
+        const data = await getEarningsTransactions({
+          page,
+          limit: 10,
+          payoutStatus: filter === 'all' ? undefined : filter,
+        });
 
-      setTransactions(data.items || []);
-      setPagination(data.pagination);
-    } catch (err) {
-      console.error('Failed to load transactions:', err);
-    } finally {
-      setTransactionLoading(false);
-    }
-  }, [payoutFilter]);
+        setTransactions(data.items || []);
+        setPagination(
+          data.pagination || {
+            page: 1,
+            limit: 10,
+            total: 0,
+            pages: 0,
+          }
+        );
+      } catch (err) {
+        console.error('Failed to load transactions:', err);
+      } finally {
+        setTransactionLoading(false);
+      }
+    },
+    [payoutFilter]
+  );
 
   const loadDashboard = useCallback(async () => {
     try {
       setLoading(true);
       setError('');
 
-      const [summaryData, monthlyData, courseData] =
-        await Promise.all([
-          getEarningsSummary(),
-          getMonthlyEarnings(),
-          getInstructorCourseStats(),
-        ]);
+      const [summaryData, monthlyData, courseData] = await Promise.all([
+        getEarningsSummary(),
+        getMonthlyEarnings(),
+        getInstructorCourseStats(),
+      ]);
 
       setSummary(summaryData);
 
       setMonthly(
-        monthlyData.map((item) => ({
+        (monthlyData || []).map((item) => ({
           month: formatMonth(item._id.year, item._id.month),
           gross: item.gross / 100,
           net: item.net / 100,
         }))
       );
 
-      setCourses(courseData);
+      setCourses(courseData || []);
     } catch (err) {
       setError(
         err.response?.data?.message ||
@@ -118,25 +174,72 @@ export default function InstructorDashboard() {
   }, [loadTransactions, payoutFilter]);
 
   const handlePageChange = (page) => {
+    if (page < 1 || page > pagination.pages || transactionLoading) return;
     loadTransactions(page, payoutFilter);
   };
 
+  const cards = [
+    {
+      title: 'Total Net Revenue',
+      value: formatCurrency(summary?.totalNet),
+      description: 'Your earnings after platform fees',
+      icon: '₹',
+      accent: 'bg-indigo-50 text-indigo-700',
+    },
+    {
+      title: 'Total Students',
+      value: summary?.totalStudents ?? 0,
+      description: 'Students enrolled in your courses',
+      icon: '👨‍🎓',
+      accent: 'bg-blue-50 text-blue-700',
+    },
+    {
+      title: 'Total Courses',
+      value: summary?.totalCourses ?? 0,
+      description: 'Courses created by you',
+      icon: '📚',
+      accent: 'bg-violet-50 text-violet-700',
+    },
+    {
+      title: 'Pending Payout',
+      value: formatCurrency(summary?.pendingPayout),
+      description: 'Earnings awaiting payout',
+      icon: '⏳',
+      accent: 'bg-amber-50 text-amber-700',
+    },
+  ];
+
   if (loading) {
     return (
-      <div className="flex min-h-[60vh] items-center justify-center text-slate-600">
-        Loading instructor dashboard...
+      <div className="flex min-h-[60vh] flex-col items-center justify-center gap-4 bg-slate-50">
+        <div className="h-12 w-12 animate-spin rounded-full border-4 border-indigo-100 border-t-indigo-600" />
+        <p className="text-lg font-medium text-slate-600">
+          Loading instructor dashboard...
+        </p>
       </div>
     );
   }
 
   if (error) {
     return (
-      <main className="min-h-screen bg-slate-50 px-4 py-12">
-        <div className="mx-auto max-w-6xl rounded-xl border border-red-200 bg-red-50 p-6 text-red-700">
-          <p>{error}</p>
+      <main className="min-h-screen bg-slate-50 px-4 py-8 sm:px-6">
+        <div className="mx-auto max-w-6xl rounded-2xl border border-red-200 bg-white p-6 shadow-sm">
+          <div className="flex items-center gap-3">
+            <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-red-50 text-xl">
+              ⚠️
+            </span>
+            <div>
+              <h2 className="text-lg font-bold text-slate-900">
+                Unable to load dashboard
+              </h2>
+              <p className="mt-1 text-base text-red-600">{error}</p>
+            </div>
+          </div>
+
           <button
             onClick={loadDashboard}
-            className="mt-4 rounded-lg bg-red-600 px-4 py-2 font-semibold text-white hover:bg-red-700"
+            className="mt-5 rounded-xl bg-red-600 px-5 py-3 text-base font-semibold text-white transition hover:bg-red-700"
+            style={{ color: '#FFFFFF' }}
           >
             Retry
           </button>
@@ -145,106 +248,91 @@ export default function InstructorDashboard() {
     );
   }
 
-  const cards = [
-    {
-      title: 'Total Net Revenue',
-      value: formatCurrency(summary?.totalNet),
-      description: 'Your earnings after platform fees',
-      color: 'text-indigo-700',
-    },
-    {
-      title: 'Total Students',
-      value: summary?.totalStudents ?? 0,
-      description: 'Students enrolled in your courses',
-      color: 'text-blue-700',
-    },
-    {
-      title: 'Total Courses',
-      value: summary?.totalCourses ?? 0,
-      description: 'Courses created by you',
-      color: 'text-purple-700',
-    },
-    {
-      title: 'Pending Payout',
-      value: formatCurrency(summary?.pendingPayout),
-      description: 'Earnings awaiting payout',
-      color: 'text-amber-700',
-    },
-  ];
-
   return (
-    <main className="min-h-screen bg-slate-50 px-4 py-8 sm:px-6 lg:px-10">
-      <div className="mx-auto max-w-7xl">
-        {/* Dashboard Header */}
-        <div className="mb-8 flex flex-wrap items-center justify-between gap-4">
-          <div>
-            <p className="text-sm font-semibold uppercase tracking-wider text-indigo-600">
-              Instructor Workspace
-            </p>
+    <main className="min-h-screen bg-slate-50 px-4 py-6 sm:px-6 lg:px-8">
+      <div className="mx-auto max-w-7xl space-y-6">
 
-            <h1 className="mt-2 text-3xl font-bold text-slate-900">
-              Instructor Dashboard
-            </h1>
+        {/* Welcome Banner */}
+        <section className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-indigo-700 via-indigo-600 to-violet-600 px-6 py-7 shadow-lg sm:px-8 sm:py-8">
+          <div className="pointer-events-none absolute -right-12 -top-24 h-64 w-64 rounded-full border-[35px] border-white/10" />
+          <div className="pointer-events-none absolute -bottom-24 right-1/4 h-48 w-48 rounded-full bg-white/10 blur-2xl" />
 
-            <p className="mt-2 text-slate-600">
-              Monitor your earnings, students, and course performance.
-            </p>
+          <div className="relative flex flex-wrap items-center justify-between gap-6">
+            <div className="max-w-2xl">
+              <p
+                className="text-base font-bold uppercase tracking-[0.18em]"
+                style={{ color: '#E0E7FF' }}
+              >
+                Instructor Workspace
+              </p>
+
+              <h1
+                className="mt-3 text-3xl font-bold tracking-tight sm:text-4xl"
+                style={{ color: '#FFFFFF' }}
+              >
+                Welcome to Your Dashboard
+              </h1>
+
+              <p
+                className="mt-3 max-w-xl text-lg leading-7"
+                style={{ color: '#EEF2FF' }}
+              >
+                Track your course performance, manage your earnings, and
+                continue growing your teaching journey.
+              </p>
+
+              <div className="mt-5 flex flex-wrap gap-3">
+                <Link
+                  to="/instructor/courses"
+                  className="rounded-xl bg-white px-5 py-3 text-base font-bold shadow-sm transition hover:bg-indigo-50"
+                  style={{ color: '#4338CA' }}
+                >
+                  Manage My Courses
+                </Link>
+
+                <Link
+                  to="/instructor/courses/new"
+                  className="rounded-xl border border-white/40 bg-white/10 px-5 py-3 text-base font-semibold transition hover:bg-white/20"
+                  style={{ color: '#FFFFFF' }}
+                >
+                  + Create Course
+                </Link>
+              </div>
+            </div>
+
+            <div className="hidden h-28 w-28 items-center justify-center rounded-3xl border border-white/20 bg-white/10 text-6xl shadow-inner sm:flex">
+              <span role="img" aria-label="Graduation cap">
+                🎓
+              </span>
+            </div>
           </div>
-
-          <div className="flex flex-wrap gap-3">
-            <Link
-              to="/instructor/courses"
-              className="rounded-lg border border-slate-300 bg-white px-5 py-3 font-semibold text-slate-700 hover:bg-slate-100"
-            >
-              My Courses
-            </Link>
-
-            <Link
-              to="/instructor/courses/new"
-              className="rounded-lg bg-indigo-600 px-5 py-3 font-semibold text-white hover:bg-indigo-700"
-            >
-              + Create Course
-            </Link>
-          </div>
-        </div>
+        </section>
 
         {/* Summary Cards */}
-        <section className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
+        <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           {cards.map((card) => (
-            <div
-              key={card.title}
-              className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm"
-            >
-              <p className="text-sm font-medium text-slate-500">
-                {card.title}
-              </p>
-
-              <p className={`mt-3 text-2xl font-bold ${card.color}`}>
-                {card.value}
-              </p>
-
-              <p className="mt-2 text-xs text-slate-500">
-                {card.description}
-              </p>
-            </div>
+            <SummaryCard key={card.title} {...card} />
           ))}
         </section>
 
-        {/* Monthly Earnings Chart */}
-        <section className="mt-8 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
-          <div className="mb-6">
-            <h2 className="text-xl font-bold text-slate-900">
-              Monthly Earnings
-            </h2>
-
-            <p className="mt-1 text-sm text-slate-500">
-              Gross revenue and your net earnings by month.
-            </p>
-          </div>
+        {/* Monthly Earnings */}
+        <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+          <SectionHeading
+            title="Monthly Earnings"
+            description="Compare your gross revenue with your net earnings."
+          />
 
           {monthly.length === 0 ? (
-            <div className="flex h-64 items-center justify-center text-slate-500">
-              No earnings data available yet.
+            <div className="flex h-64 items-center justify-center rounded-xl bg-slate-50">
+              <div className="text-center">
+                <span className="text-4xl">📊</span>
+                <p className="mt-3 text-lg font-medium text-slate-600">
+                  No earnings data available yet.
+                </p>
+                <p className="mt-1 text-base text-slate-500">
+                  Your monthly earnings will appear here.
+                </p>
+              </div>
             </div>
           ) : (
             <div className="h-80 w-full">
@@ -257,115 +345,160 @@ export default function InstructorDashboard() {
                     left: 10,
                     bottom: 5,
                   }}
+                  barGap={8}
                 >
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                  <CartesianGrid
+                    strokeDasharray="4 4"
+                    vertical={false}
+                    stroke="#E2E8F0"
+                  />
 
-                  <XAxis dataKey="month" tick={{ fontSize: 12 }} />
+                  <XAxis
+                    dataKey="month"
+                    tick={{ fontSize: 14, fill: '#64748B' }}
+                    axisLine={false}
+                    tickLine={false}
+                    dy={10}
+                  />
 
                   <YAxis
-                    tick={{ fontSize: 12 }}
+                    tick={{ fontSize: 14, fill: '#64748B' }}
+                    axisLine={false}
+                    tickLine={false}
                     tickFormatter={(value) =>
                       `₹${value.toLocaleString('en-IN')}`
                     }
                   />
 
                   <Tooltip
-                    formatter={(value) => [
-                      formatCurrency(value * 100),
-                    ]}
+                    contentStyle={{
+                      borderRadius: '12px',
+                      border: '1px solid #E2E8F0',
+                      boxShadow: '0 8px 25px rgba(15,23,42,0.08)',
+                      fontSize: '15px',
+                    }}
+                    formatter={(value) => [formatCurrency(value * 100)]}
                   />
 
                   <Bar
                     dataKey="gross"
                     name="Gross Revenue"
-                    fill="#818cf8"
-                    radius={[5, 5, 0, 0]}
+                    fill="#A5B4FC"
+                    radius={[6, 6, 0, 0]}
+                    maxBarSize={48}
                   />
 
                   <Bar
                     dataKey="net"
                     name="Net Earnings"
-                    fill="#4f46e5"
-                    radius={[5, 5, 0, 0]}
+                    fill="#4F46E5"
+                    radius={[6, 6, 0, 0]}
+                    maxBarSize={48}
                   />
                 </BarChart>
               </ResponsiveContainer>
             </div>
           )}
+
+          <div className="mt-3 flex flex-wrap gap-5 border-t border-slate-100 pt-4">
+            <div className="flex items-center gap-2">
+              <span className="h-3 w-3 rounded-sm bg-indigo-300" />
+              <span className="text-base font-medium text-slate-600">
+                Gross Revenue
+              </span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="h-3 w-3 rounded-sm bg-indigo-600" />
+              <span className="text-base font-medium text-slate-600">
+                Net Earnings
+              </span>
+            </div>
+          </div>
         </section>
 
         {/* Course Performance */}
-        <section className="mt-8 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
-          <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <h2 className="text-xl font-bold text-slate-900">
-                Course Performance
-              </h2>
-
-              <p className="mt-1 text-sm text-slate-500">
-                Student enrollment and revenue for each course.
-              </p>
-            </div>
-
-            <Link
-              to="/instructor/courses"
-              className="text-sm font-semibold text-indigo-600 hover:text-indigo-800"
-            >
-              Manage Courses →
-            </Link>
-          </div>
+        <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+          <SectionHeading
+            title="Course Performance"
+            description="Student enrollment and revenue for each course."
+            action={
+              <Link
+                to="/instructor/courses"
+                className="text-base font-bold text-indigo-600 transition hover:text-indigo-800"
+              >
+                Manage Courses →
+              </Link>
+            }
+          />
 
           {courses.length === 0 ? (
-            <p className="py-10 text-center text-slate-500">
-              You haven't created any courses yet.
-            </p>
+            <div className="rounded-xl bg-slate-50 px-4 py-12 text-center">
+              <span className="text-4xl">📚</span>
+              <p className="mt-3 text-lg font-semibold text-slate-700">
+                You haven't created any courses yet.
+              </p>
+              <Link
+                to="/instructor/courses/new"
+                className="mt-4 inline-flex rounded-xl bg-indigo-600 px-5 py-3 text-base font-semibold text-white"
+                style={{ color: '#FFFFFF' }}
+              >
+                Create Your First Course
+              </Link>
+            </div>
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[700px] text-left text-sm">
-                <thead className="border-b bg-slate-50 text-slate-600">
-                  <tr>
-                    <th className="px-4 py-3 font-semibold">Course</th>
-                    <th className="px-4 py-3 font-semibold">Students</th>
-                    <th className="px-4 py-3 font-semibold">Gross Revenue</th>
-                    <th className="px-4 py-3 font-semibold">Net Revenue</th>
-                    <th className="px-4 py-3 font-semibold">Rating</th>
+              <table className="w-full min-w-[750px] text-left">
+                <thead>
+                  <tr className="border-b border-slate-200 bg-slate-50 text-base uppercase tracking-wide text-slate-500">
+                    <th className="rounded-l-lg px-4 py-4 font-bold">Course</th>
+                    <th className="px-4 py-4 font-bold">Students</th>
+                    <th className="px-4 py-4 font-bold">Gross Revenue</th>
+                    <th className="px-4 py-4 font-bold">Net Revenue</th>
+                    <th className="rounded-r-lg px-4 py-4 font-bold">Rating</th>
                   </tr>
                 </thead>
 
                 <tbody className="divide-y divide-slate-100">
                   {courses.map((course) => (
-                    <tr key={course._id}>
+                    <tr
+                      key={course._id}
+                      className="transition hover:bg-slate-50/80"
+                    >
                       <td className="px-4 py-4">
-                        <div className="flex items-center gap-3">
-                          {course.thumbnail && (
+                        <div className="flex min-w-[220px] items-center gap-3">
+                          {course.thumbnail ? (
                             <img
                               src={course.thumbnail}
                               alt=""
-                              className="h-10 w-14 rounded object-cover"
+                              className="h-12 w-16 rounded-lg object-cover"
                             />
+                          ) : (
+                            <div className="flex h-12 w-16 items-center justify-center rounded-lg bg-indigo-50 text-xl">
+                              📘
+                            </div>
                           )}
 
-                          <span className="font-semibold text-slate-800">
+                          <span className="text-base font-semibold text-slate-800">
                             {course.title}
                           </span>
                         </div>
                       </td>
 
-                      <td className="px-4 py-4 text-slate-700">
-                        {course.students}
+                      <td className="px-4 py-4 text-[17px] text-slate-700">
+                        {course.students ?? 0}
                       </td>
 
-                      <td className="px-4 py-4 text-slate-700">
+                      <td className="px-4 py-4 text-[17px] text-slate-700">
                         {formatCurrency(course.grossRevenue)}
                       </td>
 
-                      <td className="px-4 py-4 font-semibold text-green-700">
+                      <td className="px-4 py-4 text-[17px] font-bold text-emerald-700">
                         {formatCurrency(course.netRevenue)}
                       </td>
 
-                      <td className="px-4 py-4 text-slate-700">
+                      <td className="px-4 py-4 text-[17px] text-slate-700">
                         {course.ratingCount > 0
-                          ? `${course.ratingAvg.toFixed(1)} (${course.ratingCount})`
+                          ? `${(course.ratingAvg ?? 0).toFixed(1)} (${course.ratingCount})`
                           : 'No ratings'}
                       </td>
                     </tr>
@@ -377,45 +510,32 @@ export default function InstructorDashboard() {
         </section>
 
         {/* Payout Summary */}
-        <section className="mt-8 grid gap-5 sm:grid-cols-2">
-          <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-            <p className="text-sm font-medium text-slate-500">
-              Paid Payout
-            </p>
+        <section className="grid gap-4 sm:grid-cols-2">
+          <SummaryCard
+            title="Paid Payout"
+            value={formatCurrency(summary?.paidPayout)}
+            description="Total earnings already paid to you."
+            icon="✓"
+            accent="bg-emerald-50 text-emerald-700"
+          />
 
-            <p className="mt-3 text-2xl font-bold text-green-700">
-              {formatCurrency(summary?.paidPayout)}
-            </p>
-
-            <p className="mt-2 text-sm text-slate-500">
-              Total earnings already paid to you.
-            </p>
-          </div>
-
-          <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-            <p className="text-sm font-medium text-slate-500">
-              Total Transactions
-            </p>
-
-            <p className="mt-3 text-2xl font-bold text-slate-900">
-              {summary?.totalTransactions ?? 0}
-            </p>
-
-            <p className="mt-2 text-sm text-slate-500">
-              Successful paid course transactions.
-            </p>
-          </div>
+          <SummaryCard
+            title="Total Transactions"
+            value={summary?.totalTransactions ?? 0}
+            description="Successful paid course transactions."
+            icon="💳"
+            accent="bg-blue-50 text-blue-700"
+          />
         </section>
 
         {/* Transactions and Payout History */}
-        <section className="mt-8 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
-          <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
+        <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+          <div className="mb-5 flex flex-wrap items-center justify-between gap-4">
             <div>
-              <h2 className="text-xl font-bold text-slate-900">
+              <h2 className="text-xl font-bold text-slate-900 sm:text-2xl">
                 Transactions & Payout History
               </h2>
-
-              <p className="mt-1 text-sm text-slate-500">
+              <p className="mt-1 text-[17px] text-slate-500">
                 Review your course sales and payout records.
               </p>
             </div>
@@ -423,7 +543,7 @@ export default function InstructorDashboard() {
             <select
               value={payoutFilter}
               onChange={(event) => setPayoutFilter(event.target.value)}
-              className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm text-slate-700 outline-none focus:border-indigo-500"
+              className="rounded-xl border border-slate-300 bg-white px-4 py-3 text-base font-medium text-slate-700 outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
             >
               <option value="all">All Transactions</option>
               <option value="pending">Pending Payouts</option>
@@ -432,57 +552,69 @@ export default function InstructorDashboard() {
           </div>
 
           {transactionLoading ? (
-            <div className="py-12 text-center text-slate-500">
-              Loading transactions...
+            <div className="flex items-center justify-center gap-3 py-12">
+              <div className="h-6 w-6 animate-spin rounded-full border-2 border-indigo-100 border-t-indigo-600" />
+              <p className="text-lg text-slate-500">
+                Loading transactions...
+              </p>
             </div>
           ) : transactions.length === 0 ? (
-            <div className="py-12 text-center text-slate-500">
-              No transactions found for this filter.
+            <div className="rounded-xl bg-slate-50 py-12 text-center">
+              <span className="text-4xl">🧾</span>
+              <p className="mt-3 text-lg font-semibold text-slate-700">
+                No transactions found for this filter.
+              </p>
+              <p className="mt-1 text-base text-slate-500">
+                Your transaction records will appear here.
+              </p>
             </div>
           ) : (
             <>
               <div className="overflow-x-auto">
-                <table className="w-full min-w-[750px] text-left text-sm">
-                  <thead className="border-b bg-slate-50 text-slate-600">
-                    <tr>
-                      <th className="px-4 py-3 font-semibold">Course</th>
-                      <th className="px-4 py-3 font-semibold">Date</th>
-                      <th className="px-4 py-3 font-semibold">Gross</th>
-                      <th className="px-4 py-3 font-semibold">Platform Fee</th>
-                      <th className="px-4 py-3 font-semibold">Net Earnings</th>
-                      <th className="px-4 py-3 font-semibold">Payout Status</th>
-                      <th className="px-4 py-3 font-semibold">Paid Date</th>
+                <table className="w-full min-w-[900px] text-left">
+                  <thead>
+                    <tr className="border-b border-slate-200 bg-slate-50 text-base uppercase tracking-wide text-slate-500">
+                      <th className="px-4 py-4 font-bold">Course</th>
+                      <th className="px-4 py-4 font-bold">Date</th>
+                      <th className="px-4 py-4 font-bold">Gross</th>
+                      <th className="px-4 py-4 font-bold">Platform Fee</th>
+                      <th className="px-4 py-4 font-bold">Net Earnings</th>
+                      <th className="px-4 py-4 font-bold">Payout Status</th>
+                      <th className="px-4 py-4 font-bold">Paid Date</th>
                     </tr>
                   </thead>
 
                   <tbody className="divide-y divide-slate-100">
                     {transactions.map((transaction) => (
-                      <tr key={transaction._id}>
-                        <td className="px-4 py-4 font-semibold text-slate-800">
+                      <tr
+                        key={transaction._id}
+                        className="transition hover:bg-slate-50/80"
+                      >
+                        <td className="px-4 py-4 text-base font-semibold text-slate-800">
                           {transaction.course?.title || 'Course unavailable'}
                         </td>
 
-                        <td className="px-4 py-4 text-slate-600">
+                        <td className="px-4 py-4 text-[17px] text-slate-600">
                           {formatDate(transaction.createdAt)}
                         </td>
 
-                        <td className="px-4 py-4 text-slate-700">
+                        <td className="px-4 py-4 text-[17px] text-slate-700">
                           {formatCurrency(transaction.gross)}
                         </td>
 
-                        <td className="px-4 py-4 text-slate-700">
+                        <td className="px-4 py-4 text-[17px] text-slate-700">
                           {formatCurrency(transaction.platformFee)}
                         </td>
 
-                        <td className="px-4 py-4 font-semibold text-green-700">
+                        <td className="px-4 py-4 text-[17px] font-bold text-emerald-700">
                           {formatCurrency(transaction.net)}
                         </td>
 
                         <td className="px-4 py-4">
                           <span
-                            className={`rounded-full px-3 py-1 text-xs font-semibold capitalize ${
+                            className={`inline-flex rounded-full px-3 py-1.5 text-base font-bold capitalize ${
                               transaction.payoutStatus === 'paid'
-                                ? 'bg-green-100 text-green-700'
+                                ? 'bg-emerald-100 text-emerald-700'
                                 : 'bg-amber-100 text-amber-700'
                             }`}
                           >
@@ -490,7 +622,7 @@ export default function InstructorDashboard() {
                           </span>
                         </td>
 
-                        <td className="px-4 py-4 text-slate-600">
+                        <td className="px-4 py-4 text-[17px] text-slate-600">
                           {transaction.paidAt
                             ? formatDate(transaction.paidAt)
                             : 'Not paid'}
@@ -502,8 +634,8 @@ export default function InstructorDashboard() {
               </div>
 
               {/* Pagination */}
-              <div className="mt-6 flex flex-wrap items-center justify-between gap-4 border-t border-slate-100 pt-5">
-                <p className="text-sm text-slate-500">
+              <div className="mt-5 flex flex-wrap items-center justify-between gap-4 border-t border-slate-100 pt-5">
+                <p className="text-base text-slate-500">
                   Page {pagination.page} of {pagination.pages}
                   {' · '}
                   {pagination.total} transactions
@@ -513,7 +645,7 @@ export default function InstructorDashboard() {
                   <button
                     onClick={() => handlePageChange(pagination.page - 1)}
                     disabled={pagination.page <= 1 || transactionLoading}
-                    className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+                    className="rounded-xl border border-slate-300 px-4 py-2.5 text-base font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
                   >
                     Previous
                   </button>
@@ -524,7 +656,7 @@ export default function InstructorDashboard() {
                       pagination.page >= pagination.pages ||
                       transactionLoading
                     }
-                    className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+                    className="rounded-xl border border-slate-300 px-4 py-2.5 text-base font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
                   >
                     Next
                   </button>

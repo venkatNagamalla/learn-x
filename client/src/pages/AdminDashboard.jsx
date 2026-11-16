@@ -29,18 +29,68 @@ const formatDate = (date) => {
   });
 };
 
-const StatCard = ({ title, value, description }) => (
-  <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-    <p className="text-sm font-medium text-slate-500">{title}</p>
-    <p className="mt-2 text-2xl font-bold text-slate-900">{value}</p>
-    <p className="mt-1 text-xs text-slate-500">{description}</p>
+const StatCard = ({ title, value, description, accent }) => (
+  <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+    <div className="flex items-center justify-between gap-3">
+      <p className="text-base font-semibold text-slate-600">{title}</p>
+      <span className={`h-2.5 w-2.5 rounded-full ${accent || 'bg-indigo-500'}`} />
+    </div>
+
+    <p
+      className="mt-3 break-words font-bold tracking-tight text-slate-900"
+      style={{ fontSize: '44px', lineHeight: 1.15 }}
+    >
+      {value}
+    </p>
+
+    <p className="mt-2 text-sm text-slate-500">{description}</p>
   </div>
 );
 
 const SectionTitle = ({ title, description }) => (
   <div className="mb-5">
     <h2 className="text-xl font-bold text-slate-900">{title}</h2>
-    <p className="mt-1 text-sm text-slate-500">{description}</p>
+    <p className="mt-1 text-base text-slate-500">{description}</p>
+  </div>
+);
+
+const Pagination = ({
+  pagination,
+  page,
+  setPage,
+}) => (
+  <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+    <p className="text-base text-slate-500">
+      {pagination.total || 0} records found
+    </p>
+
+    <div className="flex items-center gap-2">
+      <button
+        type="button"
+        onClick={() => setPage((current) => Math.max(1, current - 1))}
+        disabled={page <= 1}
+        className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-40"
+      >
+        Previous
+      </button>
+
+      <span className="px-2 text-sm font-semibold text-slate-600">
+        {pagination.page || 1} / {pagination.pages || 1}
+      </span>
+
+      <button
+        type="button"
+        onClick={() =>
+          setPage((current) =>
+            Math.min(pagination.pages || 1, current + 1)
+          )
+        }
+        disabled={page >= (pagination.pages || 1)}
+        className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-40"
+      >
+        Next
+      </button>
+    </div>
   </div>
 );
 
@@ -114,12 +164,7 @@ export default function AdminDashboard() {
     } finally {
       setLoading(false);
     }
-  }, [
-    fetchSummary,
-    fetchCourses,
-    fetchUsers,
-    fetchEarnings,
-  ]);
+  }, [fetchSummary, fetchCourses, fetchUsers, fetchEarnings]);
 
   useEffect(() => {
     fetchDashboard();
@@ -236,10 +281,7 @@ export default function AdminDashboard() {
 
       toast.success(response.message || 'Payout marked as paid');
 
-      await Promise.all([
-        fetchEarnings(),
-        fetchSummary(),
-      ]);
+      await Promise.all([fetchEarnings(), fetchSummary()]);
     } catch (error) {
       toast.error(
         error.response?.data?.message ||
@@ -268,8 +310,8 @@ export default function AdminDashboard() {
 
   if (loading) {
     return (
-      <div className="flex min-h-[60vh] items-center justify-center">
-        <p className="font-medium text-slate-600">
+      <div className="flex min-h-[60vh] items-center justify-center bg-slate-50">
+        <p className="text-base font-semibold text-slate-600">
           Loading admin dashboard...
         </p>
       </div>
@@ -277,87 +319,107 @@ export default function AdminDashboard() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 px-4 py-8 sm:px-6 lg:px-8">
+    <main className="min-h-screen bg-slate-50 px-4 py-6 sm:px-6 lg:px-8">
       <div className="mx-auto max-w-7xl">
 
-        <div className="mb-8 flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
-          <div>
-            <p className="text-sm font-semibold uppercase tracking-wider text-indigo-600">
-              Administration
-            </p>
-            <h1 className="mt-2 text-3xl font-bold text-slate-900">
-              Admin Dashboard
-            </h1>
-            <p className="mt-2 text-slate-600">
-              Manage users, courses, platform revenue, and instructor payouts.
-            </p>
+        {/* Header */}
+        <section className="mb-7 overflow-hidden rounded-2xl bg-gradient-to-r from-indigo-700 via-indigo-600 to-violet-600 p-6 shadow-lg sm:p-8">
+          <div className="flex flex-col justify-between gap-5 sm:flex-row sm:items-center">
+            <div>
+              <p
+                className="text-sm font-bold uppercase tracking-widest"
+                style={{ color: '#E0E7FF' }}
+              >
+                Administration
+              </p>
+
+              <h1
+                className="mt-2 text-3xl font-bold"
+                style={{ color: '#FFFFFF' }}
+              >
+                Admin Dashboard
+              </h1>
+
+              <p
+                className="mt-2 text-base"
+                style={{ color: '#E0E7FF' }}
+              >
+                Manage users, courses, platform revenue, and instructor payouts.
+              </p>
+            </div>
+
+            <button
+              type="button"
+              onClick={handleRefresh}
+              disabled={refreshing}
+              className="rounded-xl bg-white px-5 py-3 font-bold text-indigo-700 shadow-sm transition hover:bg-indigo-50 disabled:opacity-60"
+              style={{ color: '#4338CA' }}
+            >
+              {refreshing ? 'Refreshing...' : 'Refresh Dashboard'}
+            </button>
           </div>
+        </section>
 
-          <button
-            onClick={handleRefresh}
-            disabled={refreshing}
-            className="rounded-lg border border-slate-300 bg-white px-5 py-2.5 font-medium text-slate-700 hover:bg-slate-100 disabled:opacity-50"
-          >
-            {refreshing ? 'Refreshing...' : 'Refresh Dashboard'}
-          </button>
-        </div>
-
-        {/* Dashboard statistics */}
-        <section className="mb-10">
+        {/* Platform statistics */}
+        <section className="mb-9">
           <SectionTitle
             title="Platform Overview"
             description="Current platform statistics and financial summary."
           />
 
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
             <StatCard
               title="Total Users"
               value={summary?.users?.total ?? 0}
               description={`${summary?.users?.students ?? 0} students · ${summary?.users?.instructors ?? 0} instructors · ${summary?.users?.admins ?? 0} admins`}
+              accent="bg-indigo-500"
             />
 
             <StatCard
               title="Total Courses"
               value={summary?.courses?.total ?? 0}
               description={`${summary?.courses?.published ?? 0} published · ${summary?.courses?.pending ?? 0} pending`}
+              accent="bg-blue-500"
             />
 
             <StatCard
               title="Total Sales"
               value={formatPrice(summary?.totalSales)}
               description={`${summary?.totalTransactions ?? 0} transactions`}
+              accent="bg-emerald-500"
             />
 
             <StatCard
               title="Platform Fees"
               value={formatPrice(summary?.totalPlatformFees)}
               description="Total platform revenue"
+              accent="bg-violet-500"
             />
           </div>
         </section>
 
         {/* Course approvals */}
-        <section className="mb-12">
+        <section className="mb-9">
           <SectionTitle
             title="Course Approvals"
             description={`${courses.length} courses are waiting for review.`}
           />
 
           {courses.length === 0 ? (
-            <div className="rounded-xl border border-slate-200 bg-white p-8 text-center">
-              <p className="font-semibold text-slate-700">
+            <div className="rounded-2xl border border-slate-200 bg-white p-8 text-center">
+              <p className="text-lg font-bold text-slate-700">
                 No pending courses
               </p>
-              <p className="mt-1 text-sm text-slate-500">
+              <p className="mt-1 text-base text-slate-500">
                 All submitted courses have been reviewed.
               </p>
             </div>
           ) : (
-            <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+            <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
               {courses.map((course) => (
-                <div
+                <article
                   key={course._id}
-                  className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm"
+                  className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition hover:shadow-md"
                 >
                   {course.thumbnail ? (
                     <img
@@ -366,92 +428,93 @@ export default function AdminDashboard() {
                       className="h-48 w-full bg-slate-100 object-cover"
                     />
                   ) : (
-                    <div className="flex h-48 items-center justify-center bg-slate-100 text-slate-500">
+                    <div className="flex h-48 items-center justify-center bg-slate-100 text-base font-medium text-slate-500">
                       No Course Thumbnail
                     </div>
                   )}
 
                   <div className="p-5">
                     <div className="mb-3 flex flex-wrap justify-between gap-2">
-                      <span className="rounded-full bg-indigo-50 px-3 py-1 text-xs font-semibold text-indigo-700">
+                      <span className="rounded-full bg-indigo-50 px-3 py-1.5 text-sm font-semibold text-indigo-700">
                         {course.category}
                       </span>
-                      <span className="rounded-full bg-yellow-50 px-3 py-1 text-xs font-semibold text-yellow-700">
+                      <span className="rounded-full bg-amber-50 px-3 py-1.5 text-sm font-semibold text-amber-700">
                         Pending Review
                       </span>
                     </div>
 
-                    <h3 className="text-lg font-bold text-slate-900">
+                    <h3 className="text-xl font-bold text-slate-900">
                       {course.title}
                     </h3>
 
-                    <p className="mt-2 line-clamp-3 text-sm text-slate-600">
+                    <p className="mt-2 line-clamp-3 text-base leading-relaxed text-slate-600">
                       {course.description}
                     </p>
 
                     <div className="mt-4 border-t border-slate-100 pt-4">
-                      <p className="text-sm font-medium text-slate-800">
+                      <p className="text-base font-semibold text-slate-800">
                         {course.instructor?.name || 'Unknown instructor'}
                       </p>
-                      <p className="break-all text-xs text-slate-500">
+                      <p className="mt-1 break-all text-sm text-slate-500">
                         {course.instructor?.email || ''}
                       </p>
-                      <p className="mt-2 text-sm font-semibold text-slate-800">
+                      <p className="mt-2 text-base font-bold text-slate-800">
                         Course price: {formatPrice(course.price)}
                       </p>
                     </div>
 
                     <div className="mt-5 flex flex-col gap-3 sm:flex-row">
                       <button
+                        type="button"
                         onClick={() =>
                           handleCourseAction(course._id, 'published')
                         }
                         disabled={processingId === course._id}
-                        className="flex-1 rounded-lg bg-green-600 px-4 py-3 font-semibold text-white hover:bg-green-700 disabled:opacity-50"
+                        className="flex-1 rounded-xl bg-emerald-600 px-4 py-3 font-bold transition hover:bg-emerald-700 disabled:opacity-50"
+                        style={{ color: '#FFFFFF' }}
                       >
                         Approve Course
                       </button>
 
                       <button
+                        type="button"
                         onClick={() =>
                           handleCourseAction(course._id, 'draft')
                         }
                         disabled={processingId === course._id}
-                        className="flex-1 rounded-lg border border-red-300 px-4 py-3 font-semibold text-red-600 hover:bg-red-50 disabled:opacity-50"
+                        className="flex-1 rounded-xl border border-red-300 px-4 py-3 font-bold text-red-600 transition hover:bg-red-50 disabled:opacity-50"
                       >
                         Reject Course
                       </button>
                     </div>
                   </div>
-                </div>
+                </article>
               ))}
             </div>
           )}
         </section>
 
         {/* User management */}
-        <section className="mb-12">
+        <section className="mb-9">
           <SectionTitle
             title="User Management"
             description="Search users, filter by role, and manage account access."
           />
 
           <div className="mb-4 flex flex-col gap-3 sm:flex-row">
-            <form
-              onSubmit={handleUserSearch}
-              className="flex flex-1 gap-2"
-            >
+            <form onSubmit={handleUserSearch} className="flex flex-1 gap-2">
               <input
                 type="text"
                 value={userSearch}
                 onChange={(event) => setUserSearch(event.target.value)}
                 placeholder="Search by name or email..."
-                className="min-w-0 flex-1 rounded-lg border border-slate-300 bg-white px-4 py-2.5 outline-none focus:border-indigo-500"
+                className="min-w-0 flex-1 rounded-xl border border-slate-300 bg-white px-4 py-3 text-base text-slate-800 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
               />
 
               <button
                 type="submit"
-                className="rounded-lg bg-indigo-600 px-5 py-2.5 font-semibold text-white hover:bg-indigo-700"
+                className="rounded-xl bg-indigo-600 px-5 py-3 font-bold transition hover:bg-indigo-700"
+                style={{ color: '#FFFFFF' }}
               >
                 Search
               </button>
@@ -460,7 +523,7 @@ export default function AdminDashboard() {
             <select
               value={roleFilter}
               onChange={handleRoleChange}
-              className="rounded-lg border border-slate-300 bg-white px-4 py-2.5 outline-none"
+              className="rounded-xl border border-slate-300 bg-white px-4 py-3 text-base text-slate-700 outline-none focus:border-indigo-500"
             >
               <option value="">All Roles</option>
               <option value="student">Students</option>
@@ -469,44 +532,43 @@ export default function AdminDashboard() {
             </select>
           </div>
 
-          <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
-            <table className="min-w-full divide-y divide-slate-200 text-sm">
+          <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white shadow-sm">
+            <table className="min-w-full divide-y divide-slate-200 text-base">
               <thead className="bg-slate-50">
                 <tr>
-                  <th className="px-5 py-3 text-left font-semibold text-slate-600">User</th>
-                  <th className="px-5 py-3 text-left font-semibold text-slate-600">Role</th>
-                  <th className="px-5 py-3 text-left font-semibold text-slate-600">Joined</th>
-                  <th className="px-5 py-3 text-left font-semibold text-slate-600">Status</th>
-                  <th className="px-5 py-3 text-left font-semibold text-slate-600">Action</th>
+                  {['User', 'Role', 'Joined', 'Status', 'Action'].map((heading) => (
+                    <th
+                      key={heading}
+                      className="whitespace-nowrap px-5 py-4 text-left text-sm font-bold text-slate-600"
+                    >
+                      {heading}
+                    </th>
+                  ))}
                 </tr>
               </thead>
 
               <tbody className="divide-y divide-slate-100">
                 {users.map((user) => (
-                  <tr key={user._id}>
+                  <tr key={user._id} className="transition hover:bg-slate-50">
                     <td className="px-5 py-4">
-                      <p className="font-semibold text-slate-800">
-                        {user.name}
-                      </p>
-                      <p className="text-xs text-slate-500">
-                        {user.email}
-                      </p>
+                      <p className="font-bold text-slate-800">{user.name}</p>
+                      <p className="mt-1 text-sm text-slate-500">{user.email}</p>
                     </td>
 
                     <td className="px-5 py-4 capitalize text-slate-600">
                       {user.role}
                     </td>
 
-                    <td className="px-5 py-4 text-slate-600">
+                    <td className="whitespace-nowrap px-5 py-4 text-slate-600">
                       {formatDate(user.createdAt)}
                     </td>
 
                     <td className="px-5 py-4">
                       <span
-                        className={`rounded-full px-3 py-1 text-xs font-semibold ${
+                        className={`whitespace-nowrap rounded-full px-3 py-1.5 text-sm font-bold ${
                           user.isBlocked
                             ? 'bg-red-50 text-red-700'
-                            : 'bg-green-50 text-green-700'
+                            : 'bg-emerald-50 text-emerald-700'
                         }`}
                       >
                         {user.isBlocked ? 'Blocked' : 'Active'}
@@ -515,16 +577,17 @@ export default function AdminDashboard() {
 
                     <td className="px-5 py-4">
                       {user.role === 'admin' ? (
-                        <span className="text-xs text-slate-400">
+                        <span className="text-sm text-slate-400">
                           Admin account
                         </span>
                       ) : (
                         <button
+                          type="button"
                           onClick={() => handleBlockToggle(user)}
                           disabled={processingId === user._id}
-                          className={`rounded-lg px-3 py-2 text-xs font-semibold disabled:opacity-50 ${
+                          className={`whitespace-nowrap rounded-lg px-4 py-2 text-sm font-bold transition disabled:opacity-50 ${
                             user.isBlocked
-                              ? 'bg-green-50 text-green-700 hover:bg-green-100'
+                              ? 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
                               : 'bg-red-50 text-red-700 hover:bg-red-100'
                           }`}
                         >
@@ -541,7 +604,7 @@ export default function AdminDashboard() {
 
                 {users.length === 0 && (
                   <tr>
-                    <td colSpan="5" className="px-5 py-10 text-center text-slate-500">
+                    <td colSpan="5" className="px-5 py-10 text-center text-base text-slate-500">
                       No users found.
                     </td>
                   </tr>
@@ -550,39 +613,15 @@ export default function AdminDashboard() {
             </table>
           </div>
 
-          <div className="mt-4 flex items-center justify-between">
-            <p className="text-sm text-slate-500">
-              {userPagination.total || 0} users found
-            </p>
-
-            <div className="flex gap-2">
-              <button
-                onClick={() => setUserPage((page) => Math.max(1, page - 1))}
-                disabled={userPage <= 1}
-                className="rounded-lg border border-slate-300 px-3 py-2 text-sm disabled:opacity-40"
-              >
-                Previous
-              </button>
-              <span className="px-2 py-2 text-sm text-slate-600">
-                {userPagination.page || 1} / {userPagination.pages || 1}
-              </span>
-              <button
-                onClick={() =>
-                  setUserPage((page) =>
-                    Math.min(userPagination.pages || 1, page + 1)
-                  )
-                }
-                disabled={userPage >= (userPagination.pages || 1)}
-                className="rounded-lg border border-slate-300 px-3 py-2 text-sm disabled:opacity-40"
-              >
-                Next
-              </button>
-            </div>
-          </div>
+          <Pagination
+            pagination={userPagination}
+            page={userPage}
+            setPage={setUserPage}
+          />
         </section>
 
         {/* Instructor payouts */}
-        <section className="mb-12">
+        <section className="mb-8">
           <SectionTitle
             title="Instructor Payouts"
             description="Review instructor earnings and record completed payouts."
@@ -592,7 +631,7 @@ export default function AdminDashboard() {
             <select
               value={payoutFilter}
               onChange={handlePayoutFilterChange}
-              className="rounded-lg border border-slate-300 bg-white px-4 py-2.5 outline-none"
+              className="rounded-xl border border-slate-300 bg-white px-4 py-3 text-base text-slate-700 outline-none focus:border-indigo-500"
             >
               <option value="">All Payouts</option>
               <option value="pending">Pending</option>
@@ -600,29 +639,38 @@ export default function AdminDashboard() {
             </select>
           </div>
 
-          <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
-            <table className="min-w-full divide-y divide-slate-200 text-sm">
+          <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white shadow-sm">
+            <table className="min-w-full divide-y divide-slate-200 text-base">
               <thead className="bg-slate-50">
                 <tr>
-                  <th className="px-5 py-3 text-left font-semibold text-slate-600">Instructor</th>
-                  <th className="px-5 py-3 text-left font-semibold text-slate-600">Course</th>
-                  <th className="px-5 py-3 text-left font-semibold text-slate-600">Gross</th>
-                  <th className="px-5 py-3 text-left font-semibold text-slate-600">Platform Fee</th>
-                  <th className="px-5 py-3 text-left font-semibold text-slate-600">Instructor Net</th>
-                  <th className="px-5 py-3 text-left font-semibold text-slate-600">Date</th>
-                  <th className="px-5 py-3 text-left font-semibold text-slate-600">Status</th>
-                  <th className="px-5 py-3 text-left font-semibold text-slate-600">Action</th>
+                  {[
+                    'Instructor',
+                    'Course',
+                    'Gross',
+                    'Platform Fee',
+                    'Instructor Net',
+                    'Date',
+                    'Status',
+                    'Action',
+                  ].map((heading) => (
+                    <th
+                      key={heading}
+                      className="whitespace-nowrap px-5 py-4 text-left text-sm font-bold text-slate-600"
+                    >
+                      {heading}
+                    </th>
+                  ))}
                 </tr>
               </thead>
 
               <tbody className="divide-y divide-slate-100">
                 {earnings.map((earning) => (
-                  <tr key={earning._id}>
+                  <tr key={earning._id} className="transition hover:bg-slate-50">
                     <td className="px-5 py-4">
-                      <p className="font-semibold text-slate-800">
+                      <p className="font-bold text-slate-800">
                         {earning.instructor?.name || 'Unknown'}
                       </p>
-                      <p className="text-xs text-slate-500">
+                      <p className="mt-1 text-sm text-slate-500">
                         {earning.instructor?.email || ''}
                       </p>
                     </td>
@@ -631,35 +679,35 @@ export default function AdminDashboard() {
                       {earning.course?.title || 'Unknown course'}
                     </td>
 
-                    <td className="px-5 py-4 text-slate-700">
+                    <td className="whitespace-nowrap px-5 py-4 text-slate-700">
                       {formatPrice(earning.gross)}
                     </td>
 
-                    <td className="px-5 py-4 text-slate-700">
+                    <td className="whitespace-nowrap px-5 py-4 text-slate-700">
                       {formatPrice(earning.platformFee)}
                     </td>
 
-                    <td className="px-5 py-4 font-semibold text-slate-800">
+                    <td className="whitespace-nowrap px-5 py-4 font-bold text-slate-800">
                       {formatPrice(earning.net)}
                     </td>
 
-                    <td className="px-5 py-4 text-slate-600">
+                    <td className="whitespace-nowrap px-5 py-4 text-slate-600">
                       {formatDate(earning.createdAt)}
                     </td>
 
                     <td className="px-5 py-4">
                       <span
-                        className={`rounded-full px-3 py-1 text-xs font-semibold ${
+                        className={`whitespace-nowrap rounded-full px-3 py-1.5 text-sm font-bold ${
                           earning.payoutStatus === 'paid'
-                            ? 'bg-green-50 text-green-700'
-                            : 'bg-yellow-50 text-yellow-700'
+                            ? 'bg-emerald-50 text-emerald-700'
+                            : 'bg-amber-50 text-amber-700'
                         }`}
                       >
                         {earning.payoutStatus}
                       </span>
 
                       {earning.paidAt && (
-                        <p className="mt-1 text-xs text-slate-400">
+                        <p className="mt-1 text-sm text-slate-400">
                           {formatDate(earning.paidAt)}
                         </p>
                       )}
@@ -668,16 +716,18 @@ export default function AdminDashboard() {
                     <td className="px-5 py-4">
                       {earning.payoutStatus === 'pending' ? (
                         <button
+                          type="button"
                           onClick={() => handlePayout(earning)}
                           disabled={processingId === earning._id}
-                          className="whitespace-nowrap rounded-lg bg-indigo-600 px-3 py-2 text-xs font-semibold text-white hover:bg-indigo-700 disabled:opacity-50"
+                          className="whitespace-nowrap rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-bold transition hover:bg-indigo-700 disabled:opacity-50"
+                          style={{ color: '#FFFFFF' }}
                         >
                           {processingId === earning._id
                             ? 'Processing...'
                             : 'Mark as Paid'}
                         </button>
                       ) : (
-                        <span className="text-xs font-medium text-green-700">
+                        <span className="whitespace-nowrap text-sm font-bold text-emerald-700">
                           Completed
                         </span>
                       )}
@@ -687,7 +737,7 @@ export default function AdminDashboard() {
 
                 {earnings.length === 0 && (
                   <tr>
-                    <td colSpan="8" className="px-5 py-10 text-center text-slate-500">
+                    <td colSpan="8" className="px-5 py-10 text-center text-base text-slate-500">
                       No earnings found for this filter.
                     </td>
                   </tr>
@@ -696,40 +746,13 @@ export default function AdminDashboard() {
             </table>
           </div>
 
-          <div className="mt-4 flex items-center justify-between">
-            <p className="text-sm text-slate-500">
-              {earningPagination.total || 0} earnings found
-            </p>
-
-            <div className="flex gap-2">
-              <button
-                onClick={() =>
-                  setEarningPage((page) => Math.max(1, page - 1))
-                }
-                disabled={earningPage <= 1}
-                className="rounded-lg border border-slate-300 px-3 py-2 text-sm disabled:opacity-40"
-              >
-                Previous
-              </button>
-              <span className="px-2 py-2 text-sm text-slate-600">
-                {earningPagination.page || 1} / {earningPagination.pages || 1}
-              </span>
-              <button
-                onClick={() =>
-                  setEarningPage((page) =>
-                    Math.min(earningPagination.pages || 1, page + 1)
-                  )
-                }
-                disabled={earningPage >= (earningPagination.pages || 1)}
-                className="rounded-lg border border-slate-300 px-3 py-2 text-sm disabled:opacity-40"
-              >
-                Next
-              </button>
-            </div>
-          </div>
+          <Pagination
+            pagination={earningPagination}
+            page={earningPage}
+            setPage={setEarningPage}
+          />
         </section>
-
       </div>
-    </div>
+    </main>
   );
 }

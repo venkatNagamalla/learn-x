@@ -94,13 +94,16 @@ export default function Navbar() {
             onClick={closeMenu}
             className="flex shrink-0 items-center gap-2.5"
           >
-            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-indigo-600 text-xl font-extrabold text-white shadow-md shadow-indigo-600/20">
-              L
-            </div>
+            
 
-            <span className="font-[Manrope] text-2xl font-extrabold tracking-tight text-slate-800">
-              LMS<span className="text-indigo-600">Platform</span>
-            </span>
+            <span className="inline-flex items-center text-2xl font-extrabold tracking-tight">
+  <span className="bg-gradient-to-r from-indigo-600 to-violet-600 bg-clip-text text-transparent">
+    Learn-
+  </span>
+  <span className="text-black">
+    X
+  </span>
+</span>
           </Link>
 
           {/* Desktop Navigation */}
@@ -165,12 +168,7 @@ export default function Navbar() {
                   Login
                 </Link>
 
-                <Link
-                  to="/register"
-                  className="rounded-xl bg-indigo-600 px-6 py-3 text-base font-bold text-white shadow-md shadow-indigo-600/20 transition hover:-translate-y-0.5 hover:bg-indigo-700"
-                >
-                  Get Started
-                </Link>
+               
               </>
             )}
           </div>

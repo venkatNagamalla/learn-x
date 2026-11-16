@@ -20,16 +20,31 @@ import earningRoutes from './routes/earningRoutes.js';
 
 const app = express();
 
-app.use(helmet());
+// Allow PayU Hosted Checkout form submissions.
+app.use(
+  helmet({
+    contentSecurityPolicy: {
+      directives: {
+        formAction: [
+          "'self'",
+          'https://test.payu.in',
+          'https://secure.payu.in',
+        ],
+      },
+    },
+  })
+);
 
-app.use(cors({
-  origin: process.env.CLIENT_URL,
-  credentials: true,
-}));
+app.use(
+  cors({
+    origin: process.env.CLIENT_URL,
+    credentials: true,
+  })
+);
 
 app.use(morgan('dev'));
 
-// PayU Hosted Checkout form callback parsing.
+// PayU Hosted Checkout callback parsing.
 app.use(express.urlencoded({ extended: false }));
 
 // Normal JSON API request parsing.
@@ -37,48 +52,25 @@ app.use(express.json());
 
 app.use(cookieParser());
 
-// Health check API
+// Health check API.
 app.get('/api/health', (req, res) => {
   res.json({ ok: true });
 });
 
-// Authentication routes
 app.use('/api/auth', authRoutes);
-
-// Course management routes
 app.use('/api/courses', courseRoutes);
-
-// Enrollment and My Learning routes
 app.use('/api/enrollments', enrollmentRoutes);
-
-// Instructor earnings routes
 app.use('/api/earnings', earningRoutes);
-
-// Admin routes
 app.use('/api/admin', adminRoutes);
-
-// Payment routes
 app.use('/api/payments', paymentRoutes);
-
-// Student lesson playback routes
 app.use('/api/student/lessons', studentLessonRoutes);
-
-// Instructor lesson video upload routes
 app.use('/api/lessons', lessonRoutes);
-
-// Lesson progress routes
 app.use('/api/progress', progressRoutes);
-
-// Quiz routes
 app.use('/api', quizRoutes);
-
-// Live class routes
 app.use('/api/live', liveClassRoutes);
-
-// Certificate routes
 app.use('/api/certificates', certificateRoutes);
 
-// Global error handler
+// Global error handler.
 app.use((err, req, res, next) => {
   console.error(err);
 

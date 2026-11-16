@@ -108,7 +108,7 @@ const createTestPayment = async () => {
 const verifiedDetails = (txnid) => ({
   status: 'success',
   txnid,
-  amount: '999.00',
+  amt: '999.00',
   mihpayid: 'PAYU-FULFILLMENT-TEST',
 });
 
