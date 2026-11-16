@@ -7,28 +7,56 @@ import { getSignedUrl } from '@aws-sdk/cloudfront-signer';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Resolve the private key relative to the server directory.
-const privateKeyPath = path.resolve(
-  __dirname,
-  '../../',
-  process.env.CLOUDFRONT_PRIVATE_KEY_PATH
-);
+// Load CloudFront configuration only when signing is required.
+const getCloudFrontConfig = () => {
+  const cloudFrontDomain = process.env.CLOUDFRONT_DOMAIN;
+  const keyPairId = process.env.CLOUDFRONT_KEY_PAIR_ID;
+  const privateKeyPathEnv =
+    process.env.CLOUDFRONT_PRIVATE_KEY_PATH;
 
-const privateKey = fs.readFileSync(privateKeyPath, 'utf8');
+  if (!cloudFrontDomain || !keyPairId || !privateKeyPathEnv) {
+    throw new Error(
+      'CloudFront environment variables are missing'
+    );
+  }
 
-const cloudFrontDomain = process.env.CLOUDFRONT_DOMAIN;
-const keyPairId = process.env.CLOUDFRONT_KEY_PAIR_ID;
+  const privateKeyPath = path.resolve(
+    __dirname,
+    '../../',
+    privateKeyPathEnv
+  );
 
-if (!cloudFrontDomain || !keyPairId) {
-  throw new Error('CloudFront environment variables are missing');
-}
+  if (!fs.existsSync(privateKeyPath)) {
+    throw new Error(
+      `CloudFront private key not found: ${privateKeyPath}`
+    );
+  }
+
+  const privateKey = fs.readFileSync(
+    privateKeyPath,
+    'utf8'
+  );
+
+  return {
+    cloudFrontDomain,
+    keyPairId,
+    privateKey,
+  };
+};
 
 // Existing single-file signing function.
 export const createSignedLessonUrl = (
   lessonId,
   fileName = 'master.m3u8'
 ) => {
-  const resource = `https://${cloudFrontDomain}/lessons/${lessonId}/${fileName}`;
+  const {
+    cloudFrontDomain,
+    keyPairId,
+    privateKey,
+  } = getCloudFrontConfig();
+
+  const resource =
+    `https://${cloudFrontDomain}/lessons/${lessonId}/${fileName}`;
 
   return getSignedUrl({
     url: resource,
@@ -41,10 +69,16 @@ export const createSignedLessonUrl = (
 };
 
 // Sign the entire lesson folder for HLS playback.
-// This allows access to the master playlist, child playlists,
-// and video segments belonging to this lesson.
 export const createSignedLessonAccess = (lessonId) => {
-  const expiresAt = new Date(Date.now() + 60 * 60 * 1000);
+  const {
+    cloudFrontDomain,
+    keyPairId,
+    privateKey,
+  } = getCloudFrontConfig();
+
+  const expiresAt = new Date(
+    Date.now() + 60 * 60 * 1000
+  );
 
   const lessonFolderUrl =
     `https://${cloudFrontDomain}/lessons/${lessonId}/*`;
